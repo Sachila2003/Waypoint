@@ -79,7 +79,7 @@ android {
 
     namespace "com.waypoint"
     defaultConfig {
-        applicationId "com.waypoint"
+        applicationId "com.sachila.waypoint"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -117,3 +117,5 @@ dependencies {
         implementation jscFlavor
     }
 }
+apply plugin: 'com.google.gms.google-services'
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"

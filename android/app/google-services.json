@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "266909651460",
+    "project_id": "finalprojectmap-e554f",
+    "storage_bucket": "finalprojectmap-e554f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266909651460:android:714190ab397cd2054fdb51",
+        "android_client_info": {
+          "package_name": "com.sachila.waypoint"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "266909651460-5tqudbq9i1m7ag0o4rkn1s3os2pmi6gn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sachila.waypoint",
+            "certificate_hash": "a9b782298cb7fad8f72dc05f5025240287e9f9e8"
+          }
+        },
+        {
+          "client_id": "266909651460-2i8ukrs6kgo8d3qmd482fbbjoee7a9ae.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmgo_o3lVp5UeLHNMPTpeXpn7If5D7rBg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "266909651460-2i8ukrs6kgo8d3qmd482fbbjoee7a9ae.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
