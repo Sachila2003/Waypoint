@@ -1,80 +1,97 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Text, Button, PermissionsAndroid, Platform, Alert } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps'; 
+// src/screens/HomeScreen.js
+import React, { useEffect, useState, useRef } from 'react';
+import { View, StyleSheet, Text, Button, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import auth from '@react-native-firebase/auth';
 import Geolocation from 'react-native-geolocation-service';
+import axios from 'axios';
 
-// map eke zoom level ekata state ekak hadagannawa
+// map eka mulinma lankawa pennanna set karanawa
 const initialRegion = {
-  latitude: 6.9271,   
-  longitude: 79.8612,
-  latitudeDelta: 0.0922,
-  longitudeDelta: 0.0421,
+  latitude: 7.8731,
+  longitude: 80.7718,
+  latitudeDelta: 3.5, 
+  longitudeDelta: 3.5,
 };
 
 const HomeScreen = () => {
-  // map eke region ekai, userge location ekai thiyaganna states
   const [region, setRegion] = useState(initialRegion);
-  const [userLocation, setUserLocation] = useState(null);
-  const mapRef = useRef(null); 
+  const mapRef = useRef(null);
 
-  // location permission illala, location eka ganna function eka
-  const requestLocationPermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Location Permission',
-            message: 'Waypoint needs access to your location to show you nearby services.',
-            buttonPositive: 'OK',
-          },
-        );
-        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          console.log('Location permission granted');
-          // Permission hmbuna nm, location ek gnnw
-          getCurrentLocation(); 
-        } else {
-          console.log('Location permission denied');
-          Alert.alert("Permission Denied", "Cannot get your location without permission.");
-        }
-      } catch (err) {
-        console.warn(err);
-      }
-    } else {
-      getCurrentLocation();
+  const [markers, setMarkers] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchPlaces = async (currentRegion) => {
+    setIsLoading(true);
+    setMarkers([]);
+
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = currentRegion;
+    const south = latitude - latitudeDelta / 2;
+    const west = longitude - longitudeDelta / 2;
+    const north = latitude + latitudeDelta / 2;
+    const east = longitude + longitudeDelta / 2;
+
+    // --- CHANGE 1: Query eka wenas kala ATM, Bank, Fuel okkoma ganna ---
+    const query = `
+      [out:json][timeout:25];
+      (
+        node["amenity"~"atm|bank|fuel"](${south},${west},${north},${east});
+        way["amenity"~"atm|bank|fuel"](${south},${west},${north},${east});
+        relation["amenity"~"atm|bank|fuel"](${south},${west},${north},${east});
+      );
+      out center;
+    `;
+
+    try {
+      const response = await axios.post('https://overpass-api.de/api/interpreter', `data=${encodeURIComponent(query)}`);
+
+      const newMarkers = response.data.elements.map(element => ({
+        id: element.id,
+        coordinate: { latitude: element.lat || element.center.lat, longitude: element.lon || element.center.lon },
+        title: element.tags?.name || element.tags.amenity.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        description: element.tags?.operator || 'Details not available',
+        type: element.tags.amenity, // type eka save karagannawa (atm, bank, fuel)
+      }));
+
+      console.log(`Found ${newMarkers.length} places.`);
+      setMarkers(newMarkers);
+
+    } catch (error) {
+      console.error("Overpass API Error:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // current location eka araganna function eka
-  const getCurrentLocation = () => {
+  // Location ganna eka wenama function ekak kala 
+  const goToMyLocation = () => {
     Geolocation.getCurrentPosition(
       (position) => {
-        console.log('SUCCESS: Location found!', position);
-        
         const { latitude, longitude } = position.coords;
-        const newLocation = { latitude, longitude };
-        
-        // User ge location eka state eke save karanawa
-        setUserLocation(newLocation);
-        
-        // Map eka user ge location ekata animate karanawa
         mapRef.current?.animateToRegion({
-          ...newLocation,
-          latitudeDelta: 0.01, // zoom in closer
-          longitudeDelta: 0.01,
-        }, 1000); 
+          latitude,
+          longitude,
+          latitudeDelta: 0.02, // Close zoom
+          longitudeDelta: 0.02,
+        }, 1000);
       },
-      (error) => {
-        console.log('ERROR: Location error!', error);
-        Alert.alert("Error getting location", error.message);
-      },
+      (error) => { Alert.alert("Error", error.message); },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
     );
   };
 
-  // screen eka load weddi location permission illanawa
   useEffect(() => {
+    const requestLocationPermission = async () => {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          { title: 'Location Permission', message: 'Waypoint needs access to your location.', buttonPositive: 'OK' }
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('Location permission denied');
+        }
+      }
+    };
     requestLocationPermission();
   }, []);
 
@@ -84,24 +101,37 @@ const HomeScreen = () => {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        initialRegion={region} // map eka mulinma Colombo pennanawa
-        showsUserLocation={true} // userge location eka nil paata thitakin pennanawa
+        initialRegion={region} // Map eka mulinma Lankawa pennanawa
+        showsUserLocation={true}
+        onRegionChangeComplete={(newRegion) => fetchPlaces(newRegion)}
       >
-        {/* userge location eke marker ekak daanawa */}
-        {userLocation && (
+        {markers.map(marker => (
           <Marker
-            coordinate={userLocation}
-            title={'You are here'}
-            pinColor={'#007BFF'}
+            key={marker.id}
+            coordinate={marker.coordinate}
+            title={marker.title}
+            description={marker.description}
+            pinColor={marker.type === 'atm' ? 'gold' : marker.type === 'bank' ? 'blue' : 'red'} // Type ekata anuwa color eka wenas karanawa
           />
-        )}
+        ))}
       </MapView>
+
+      {/* --- CHANGE 4: "Go to My Location" button එකක් එකතු කලා --- */}
+      <TouchableOpacity style={styles.myLocationButton} onPress={goToMyLocation}>
+        <Text style={styles.myLocationButtonText}>📍</Text>
+      </TouchableOpacity>
+
+      {/* Data load weddi loading indicator ekak pennanawa */}
+      {isLoading && (
+        <View style={styles.loadingIndicator}>
+          <ActivityIndicator size="large" color="#6A0DAD" />
+          <Text>Finding nearby places...</Text>
+        </View>
+      )}
       <View style={styles.logoutButtonContainer}>
-        <Text style={styles.welcomeText}>
-          Welcome, {auth().currentUser?.displayName || 'User'}!
-        </Text>
-        <Button title="Logout" onPress={() => auth().signOut()} color="#841584"/>
-      </View> 
+        <Text style={styles.welcomeText}>Welcome, {auth().currentUser?.displayName || 'User'}!</Text>
+        <Button title="Logout" onPress={() => auth().signOut()} color="#841584" />
+      </View>
     </View>
   );
 };
@@ -109,8 +139,21 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: { ...StyleSheet.absoluteFillObject, flex: 1 },
   map: { ...StyleSheet.absoluteFillObject },
-  logoutButtonContainer: { position: 'absolute', top: 60, right: 20, backgroundColor: 'white', padding: 10, borderRadius: 10, elevation: 5, },
-  welcomeText: { fontWeight: 'bold', marginBottom: 5, }
+  logoutButtonContainer: { position: 'absolute', top: 50, right: 10, backgroundColor: 'white', padding: 8, borderRadius: 10, elevation: 5, },
+  welcomeText: { fontWeight: 'bold', marginBottom: 5, },
+  loadingIndicator: { /* ... */ },
+  myLocationButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 30,
+    padding: 15,
+    elevation: 5,
+  },
+  myLocationButtonText: {
+    fontSize: 20,
+  }
 });
 
 export default HomeScreen;
