@@ -26,6 +26,39 @@ const HomeScreen = () => {
     fuel: true,
   });
 
+  const handleSearch = async () => {
+    if (search.trim() === "") {
+      return;
+    }
+    console.log(`Searching for: ${search}`);
+    setIsLoading(true);
+    try {
+      //google geocoding api ekt req ek ywnw
+      const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
+      const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${search}&key=${apiKey}`);
+
+      if (response.data.results.length > 0) {
+        const { lat, lng } = response.data.results[0].geometry.location;
+        console.log(`Found coordinates: Lat: ${lat}, Lng: ${lng}`);
+
+        //map eke e location ek animate krnw
+        mapRef.current?.animateToRegion({
+          latitude: lat,
+          longitude: lng,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        }, 1000);
+      } else {
+        Alert.alert("Not Found", "Could not find the location. Please try another name.");
+      }
+    } catch (error) {
+      console.error("Geocoding API Error:", error);
+      Alert.alert("Error", "An error occurred while searching.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const updateSearch = (text) => {
     setSearch(text);
   };
@@ -71,14 +104,21 @@ const HomeScreen = () => {
       <View style={styles.header}>
         <SearchBar
           placeholder="Search for a city..."
-          onChangeText={updateSearch}
+          onChangeText={setSearch}
           value={search}
           lightTheme
           round
           containerStyle={styles.searchBarContainer}
           inputContainerStyle={styles.searchBarInput}
+          onSubmitEditing={handleSearch}
         />
       </View>
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6A0DAD" />
+          <Text>Searching...</Text>
+        </View>
+      )}
 
       <View style={styles.filterContainer}>
         <Button
