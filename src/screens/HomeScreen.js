@@ -17,7 +17,8 @@ const initialRegion = {
 
 const HomeScreen = () => {
   const mapRef = useRef(null);
-  const [markers, setMarkers] = useState([]);
+  const [allPlaces, setAllPlaces] = useState([]);
+  const [filteredPlaces, setFilteredPlaces] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [activeFilters, setActiveFilters] = useState({
@@ -25,61 +26,123 @@ const HomeScreen = () => {
     bank: true,
     fuel: true,
   });
+  const [userLocation, setUserLocation] = useState(null);
+
+  // App eka load weddi permission illanawa
+  useEffect(() => {
+    const requestLocationPermission = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Location Permission',
+              message: 'Waypoint needs access to your location.',
+              buttonPositive: 'OK',
+            },
+          );
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            console.log('Location permission granted');
+            getCurrentLocation();
+          } else {
+            console.log('Location permission denied');
+            fetchPlaces(initialRegion);
+          }
+        } catch (err) {
+          console.warn(err);
+        }
+      } else {
+        getCurrentLocation();
+      }
+    };
+
+    requestLocationPermission();
+  }, []);
+
+  useEffect(() => {
+    const newFilteredPlaces = allPlaces.filter(place => {
+      if (activeFilters.atm && place.type === 'atm') return true;
+      if (activeFilters.bank && place.type === 'bank') return true;
+      if (activeFilters.fuel && place.type === 'fuel') return true;
+      return false;
+    });
+    setFilteredPlaces(newFilteredPlaces);
+  }, [activeFilters, allPlaces]);
+
 
   const handleSearch = async () => {
-    if (search.trim() === "") {
-      return;
-    }
-    console.log(`Searching for: ${search}`);
+    if (search.trim() === "") return;
     setIsLoading(true);
+    setAllPlaces([]);
     try {
-      //google geocoding api ekt req ek ywnw
       const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
-      const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${search}&key=${apiKey}`);
+      const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${search}, Sri Lanka&key=${apiKey}`);
 
       if (response.data.results.length > 0) {
         const { lat, lng } = response.data.results[0].geometry.location;
-        console.log(`Found coordinates: Lat: ${lat}, Lng: ${lng}`);
+        const searchRegion = { latitude: lat, longitude: lng };
 
-        //map eke e location ek animate krnw
-        mapRef.current?.animateToRegion({
-          latitude: lat,
-          longitude: lng,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
-        }, 1000);
+        mapRef.current?.animateToRegion({ ...searchRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 1000);
+        await fetchPlaces(searchRegion);
       } else {
-        Alert.alert("Not Found", "Could not find the location. Please try another name.");
+        Alert.alert("Not Found", "Could not find the location.");
       }
     } catch (error) {
       console.error("Geocoding API Error:", error);
-      Alert.alert("Error", "An error occurred while searching.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updateSearch = (text) => {
-    setSearch(text);
-  };
-  const fetchPlaces = async (currentRegion) => {
-    console.log("Fetching places for region:", currentRegion);
+  const fetchPlaces = async (centerRegion) => {
+    setIsLoading(true);
+    const radius = 5000;
+    const { latitude, longitude } = centerRegion;
+    const query = `[out:json][timeout:25];(node(around:${radius},${latitude},${longitude})["amenity"~"atm|bank|fuel"];);out center;`;
+
+    try {
+      const response = await axios.post('https://overpass-api.de/api/interpreter', `data=${encodeURIComponent(query)}`);
+      const newPlaces = response.data.elements.map(element => ({
+        id: element.id,
+        coordinate: { latitude: element.lat, longitude: element.lon },
+        title: element.tags?.name || element.tags.amenity.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        description: element.tags?.operator || 'Details not available',
+        type: element.tags.amenity,
+      }));
+      setAllPlaces(newPlaces);
+    } catch (error) {
+      console.error("Overpass API Error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  const getCurrentLocation = () => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const currentLocation = { latitude, longitude };
+        setUserLocation(currentLocation);
+        mapRef.current?.animateToRegion({ ...currentLocation, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 1000);
+        fetchPlaces(currentLocation);
+      },
+      (error) => {
+        console.log(error);
+        fetchPlaces(initialRegion);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  };
+  
   const goToMyLocation = () => {
-    console.log("Go to my location pressed");
+      if (userLocation) {
+          mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 1000);
+      } else {
+          getCurrentLocation();
+      }
   };
 
-  const toggleFilter = (filter) => {
-    setActiveFilters(prev => ({ ...prev, [filter]: !prev[filter] }));
-  };
-
-  const filteredMarkers = markers.filter(marker => {
-    if (activeFilters.atm && marker.type === 'atm') return true;
-    if (activeFilters.bank && marker.type === 'bank') return true;
-    if (activeFilters.fuel && marker.type === 'fuel') return true;
-    return false;
-  });
+  const toggleFilter = (filter) => { setActiveFilters(prev => ({ ...prev, [filter]: !prev[filter] })); };
 
   return (
     <View style={styles.container}>
@@ -88,22 +151,29 @@ const HomeScreen = () => {
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={initialRegion}
-        onRegionChangeComplete={(newRegion) => fetchPlaces(newRegion)}
+        showsUserLocation={true}
       >
-        {filteredMarkers.map(marker => (
-          <Marker
+       {filteredPlaces.map(marker => (
+         <Marker
             key={marker.id}
             coordinate={marker.coordinate}
             title={marker.title}
             description={marker.description}
-            pinColor={marker.type === 'atm' ? 'gold' : marker.type === 'bank' ? 'blue' : 'red'}
-          />
-        ))}
+         >
+            <View style={[styles.markerContainer, {backgroundColor: marker.type === 'atm' ? '#007BFF' : marker.type === 'bank' ? '#28a745' : '#dc3545'}]}>
+               <Icon 
+                   name={ marker.type === 'atm' ? 'local-atm' : marker.type === 'bank' ? 'account-balance' : 'local-gas-station' } 
+                   size={22} 
+                   color="white" 
+               />
+            </View>
+         </Marker>
+       ))}
       </MapView>
 
       <View style={styles.header}>
         <SearchBar
-          placeholder="Search for a city..."
+          placeholder="Search for a city in Sri Lanka..."
           onChangeText={setSearch}
           value={search}
           lightTheme
@@ -113,10 +183,11 @@ const HomeScreen = () => {
           onSubmitEditing={handleSearch}
         />
       </View>
+
       {isLoading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6A0DAD" />
-          <Text>Searching...</Text>
+          <Text>Finding places...</Text>
         </View>
       )}
 
@@ -126,21 +197,21 @@ const HomeScreen = () => {
           onPress={() => toggleFilter('atm')}
           icon={{ name: 'local-atm', color: activeFilters.atm ? 'white' : 'black' }}
           buttonStyle={[styles.filterButton, activeFilters.atm && styles.filterButtonActive]}
-          titleStyle={{color: activeFilters.atm ? 'white' : 'black'}}
+          titleStyle={{ color: activeFilters.atm ? 'white' : 'black' }}
         />
         <Button
           title="Bank"
           onPress={() => toggleFilter('bank')}
           icon={{ name: 'account-balance', color: activeFilters.bank ? 'white' : 'black' }}
           buttonStyle={[styles.filterButton, activeFilters.bank && styles.filterButtonActive]}
-          titleStyle={{color: activeFilters.bank ? 'white' : 'black'}}
+          titleStyle={{ color: activeFilters.bank ? 'white' : 'black' }}
         />
         <Button
           title="Fuel"
           onPress={() => toggleFilter('fuel')}
           icon={{ name: 'local-gas-station', color: activeFilters.fuel ? 'white' : 'black' }}
           buttonStyle={[styles.filterButton, activeFilters.fuel && styles.filterButtonActive]}
-          titleStyle={{color: activeFilters.fuel ? 'white' : 'black'}}
+          titleStyle={{ color: activeFilters.fuel ? 'white' : 'black' }}
         />
       </View>
 
@@ -154,13 +225,18 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { ...StyleSheet.absoluteFillObject },
+  markerContainer: {
+    padding: 8,
+    borderRadius: 24,
+    borderColor: 'white',
+    borderWidth: 2,
+    elevation: 5,
+  },
   header: {
     position: 'absolute',
     top: 50,
     left: 10,
     right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   searchBarContainer: {
     flex: 1,
@@ -196,6 +272,15 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     padding: 10,
     elevation: 5,
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: '50%',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 20,
+    borderRadius: 10,
+    elevation: 6,
   },
 });
 
