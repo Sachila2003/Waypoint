@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity
 } from 'react-native';
@@ -7,6 +7,7 @@ import auth from '@react-native-firebase/auth';
 import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
 import { SearchBar, Button, Icon } from '@rneui/themed';
+import debounce from 'lodash.debounce';
 
 const initialRegion = {
   latitude: 7.8731,
@@ -28,24 +29,47 @@ const HomeScreen = () => {
   });
   const [userLocation, setUserLocation] = useState(null);
 
-  // App eka load weddi permission illanawa
+  const fetchPlaces = async (centerRegion) => {
+    setIsLoading(true);
+    const radius = 5000; // 5km
+    const { latitude, longitude } = centerRegion;
+    const query = `[out:json][timeout:25];(node(around:${radius},${latitude},${longitude})["amenity"~"atm|bank|fuel"];);out center;`;
+
+    try {
+      const response = await axios.post('https://overpass-api.de/api/interpreter', `data=${encodeURIComponent(query)}`);
+      const newPlaces = response.data.elements.map(element => ({
+        id: element.id,
+        coordinate: { latitude: element.lat, longitude: element.lon },
+        title: element.tags?.name || element.tags.amenity.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        description: element.tags?.operator || 'Details not available',
+        type: element.tags.amenity,
+      }));
+      setAllPlaces(newPlaces);
+    } catch (error) {
+      console.error("Overpass API Error:", error);
+      if (error.response && error.response.status === 429) {
+        console.warn("Overpass API rate limit hit. Waiting for next interval.");
+      } else {
+        Alert.alert("Error", "Could not fetch nearby places. Please check your connection.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const debouncedFetchPlaces = useCallback(debounce(fetchPlaces, 1500), []);
+
   useEffect(() => {
     const requestLocationPermission = async () => {
       if (Platform.OS === 'android') {
         try {
           const granted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message: 'Waypoint needs access to your location.',
-              buttonPositive: 'OK',
-            },
+            { title: 'Location Permission', message: 'Waypoint needs your location', buttonPositive: 'OK' }
           );
           if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-            console.log('Location permission granted');
             getCurrentLocation();
           } else {
-            console.log('Location permission denied');
             fetchPlaces(initialRegion);
           }
         } catch (err) {
@@ -55,7 +79,6 @@ const HomeScreen = () => {
         getCurrentLocation();
       }
     };
-
     requestLocationPermission();
   }, []);
 
@@ -69,7 +92,6 @@ const HomeScreen = () => {
     setFilteredPlaces(newFilteredPlaces);
   }, [activeFilters, allPlaces]);
 
-
   const handleSearch = async () => {
     if (search.trim() === "") return;
     setIsLoading(true);
@@ -77,41 +99,15 @@ const HomeScreen = () => {
     try {
       const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
       const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${search}, Sri Lanka&key=${apiKey}`);
-
       if (response.data.results.length > 0) {
         const { lat, lng } = response.data.results[0].geometry.location;
         const searchRegion = { latitude: lat, longitude: lng };
-
         mapRef.current?.animateToRegion({ ...searchRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 1000);
-        await fetchPlaces(searchRegion);
       } else {
         Alert.alert("Not Found", "Could not find the location.");
       }
     } catch (error) {
       console.error("Geocoding API Error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchPlaces = async (centerRegion) => {
-    setIsLoading(true);
-    const radius = 5000;
-    const { latitude, longitude } = centerRegion;
-    const query = `[out:json][timeout:25];(node(around:${radius},${latitude},${longitude})["amenity"~"atm|bank|fuel"];);out center;`;
-
-    try {
-      const response = await axios.post('https://overpass-api.de/api/interpreter', `data=${encodeURIComponent(query)}`);
-      const newPlaces = response.data.elements.map(element => ({
-        id: element.id,
-        coordinate: { latitude: element.lat, longitude: element.lon },
-        title: element.tags?.name || element.tags.amenity.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        description: element.tags?.operator || 'Details not available',
-        type: element.tags.amenity,
-      }));
-      setAllPlaces(newPlaces);
-    } catch (error) {
-      console.error("Overpass API Error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -124,22 +120,18 @@ const HomeScreen = () => {
         const currentLocation = { latitude, longitude };
         setUserLocation(currentLocation);
         mapRef.current?.animateToRegion({ ...currentLocation, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 1000);
-        fetchPlaces(currentLocation);
       },
-      (error) => {
-        console.log(error);
-        fetchPlaces(initialRegion);
-      },
+      (error) => console.log(error),
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
   };
   
   const goToMyLocation = () => {
-      if (userLocation) {
-          mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 1000);
-      } else {
-          getCurrentLocation();
-      }
+    if (userLocation) {
+      mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 1000);
+    } else {
+      getCurrentLocation();
+    }
   };
 
   const toggleFilter = (filter) => { setActiveFilters(prev => ({ ...prev, [filter]: !prev[filter] })); };
@@ -152,6 +144,7 @@ const HomeScreen = () => {
         style={styles.map}
         initialRegion={initialRegion}
         showsUserLocation={true}
+        onRegionChangeComplete={debouncedFetchPlaces}
       >
        {filteredPlaces.map(marker => (
          <Marker
