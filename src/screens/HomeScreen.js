@@ -1,40 +1,30 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity
-} from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity, Linking, Dimensions, FlatList } from 'react-native';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import auth from '@react-native-firebase/auth';
 import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
 import { SearchBar, Button, Icon } from '@rneui/themed';
-import debounce from 'lodash.debounce';
 
-const initialRegion = {
-  latitude: 7.8731,
-  longitude: 80.7718,
-  latitudeDelta: 3.5,
-  longitudeDelta: 3.5,
-};
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-const HomeScreen = () => {
+const HomeScreen = ({ navigation }) => {
   const mapRef = useRef(null);
-  const [allPlaces, setAllPlaces] = useState([]);
-  const [filteredPlaces, setFilteredPlaces] = useState([]);
+  
+  // --- NEW STATE: To control map visibility ---
+  const [mapVisible, setMapVisible] = useState(false);
+  const [currentRegion, setCurrentRegion] = useState(null);
+
+  const [places, setPlaces] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  const [activeFilters, setActiveFilters] = useState({
-    atm: true,
-    bank: true,
-    fuel: true,
-  });
-  const [userLocation, setUserLocation] = useState(null);
+  const [search, setSearch] = useState("");
 
-  const fetchPlaces = async (centerRegion) => {
+  const fetchPlaces = async (region) => {
+    if (!region) return;
     setIsLoading(true);
-    const radius = 5000; // 5km
-    const { latitude, longitude } = centerRegion;
+    const { latitude, longitude, latitudeDelta } = region;
+    const radius = Math.max(2000, (latitudeDelta * 111 * 1000) / 2); // Min 2km radius
     const query = `[out:json][timeout:25];(node(around:${radius},${latitude},${longitude})["amenity"~"atm|bank|fuel"];);out center;`;
-
     try {
       const response = await axios.post('https://overpass-api.de/api/interpreter', `data=${encodeURIComponent(query)}`);
       const newPlaces = response.data.elements.map(element => ({
@@ -44,65 +34,28 @@ const HomeScreen = () => {
         description: element.tags?.operator || 'Details not available',
         type: element.tags.amenity,
       }));
-      setAllPlaces(newPlaces);
+      setPlaces(newPlaces);
     } catch (error) {
       console.error("Overpass API Error:", error);
-      if (error.response && error.response.status === 429) {
-        console.warn("Overpass API rate limit hit. Waiting for next interval.");
-      } else {
-        Alert.alert("Error", "Could not fetch nearby places. Please check your connection.");
-      }
     } finally {
       setIsLoading(false);
     }
   };
-
-  const debouncedFetchPlaces = useCallback(debounce(fetchPlaces, 1500), []);
-
-  useEffect(() => {
-    const requestLocationPermission = async () => {
-      if (Platform.OS === 'android') {
-        try {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            { title: 'Location Permission', message: 'Waypoint needs your location', buttonPositive: 'OK' }
-          );
-          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-            getCurrentLocation();
-          } else {
-            fetchPlaces(initialRegion);
-          }
-        } catch (err) {
-          console.warn(err);
-        }
-      } else {
-        getCurrentLocation();
-      }
-    };
-    requestLocationPermission();
-  }, []);
-
-  useEffect(() => {
-    const newFilteredPlaces = allPlaces.filter(place => {
-      if (activeFilters.atm && place.type === 'atm') return true;
-      if (activeFilters.bank && place.type === 'bank') return true;
-      if (activeFilters.fuel && place.type === 'fuel') return true;
-      return false;
-    });
-    setFilteredPlaces(newFilteredPlaces);
-  }, [activeFilters, allPlaces]);
-
-  const handleSearch = async () => {
-    if (search.trim() === "") return;
+  
+  const handleSearch = async (searchText) => {
+    const query = searchText || search;
+    if (query.trim() === "") return;
     setIsLoading(true);
-    setAllPlaces([]);
+    setPlaces([]);
     try {
-      const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
-      const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${search}, Sri Lanka&key=${apiKey}`);
+      const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc'; 
+      const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${query}, Sri Lanka&key=${apiKey}`);
       if (response.data.results.length > 0) {
         const { lat, lng } = response.data.results[0].geometry.location;
-        const searchRegion = { latitude: lat, longitude: lng };
-        mapRef.current?.animateToRegion({ ...searchRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 1000);
+        const region = { latitude: lat, longitude: lng, latitudeDelta: 0.1, longitudeDelta: 0.1 };
+        setCurrentRegion(region);
+        setMapVisible(true); // Show the map
+        await fetchPlaces(region);
       } else {
         Alert.alert("Not Found", "Could not find the location.");
       }
@@ -113,168 +66,152 @@ const HomeScreen = () => {
     }
   };
 
-  const getCurrentLocation = () => {
-    Geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const currentLocation = { latitude, longitude };
-        setUserLocation(currentLocation);
-        mapRef.current?.animateToRegion({ ...currentLocation, latitudeDelta: 0.05, longitudeDelta: 0.05 }, 1000);
-      },
-      (error) => console.log(error),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+  const findNearby = () => {
+    const requestPermissionAndFetch = async () => {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert("Permission Denied");
+          return;
+        }
+      }
+      setIsLoading(true);
+      Geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const region = { latitude, longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+          setCurrentRegion(region);
+          setMapVisible(true); // Show the map
+          fetchPlaces(region);
+        },
+        (error) => {
+          setIsLoading(false);
+          Alert.alert("Error", "Could not get your location.");
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
+    };
+    requestPermissionAndFetch();
+  };
+
+  const renderPlaceCard = ({ item }) => (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+      <Text style={styles.cardDescription} numberOfLines={1}>{item.description}</Text>
+      <Button
+        title="Get Directions"
+        onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
+        buttonStyle={styles.directionsButton}
+        titleStyle={{ fontSize: 14 }}
+      />
+    </View>
+  );
+
+  // --- NEW: This is the Search View (when map is not visible) ---
+  if (!mapVisible) {
+    return (
+      <View style={styles.searchContainer}>
+        <Text style={styles.title}>Waypoint</Text>
+        <SearchBar
+          placeholder="Search for a city or place..."
+          onChangeText={setSearch}
+          value={search}
+          onSubmitEditing={() => handleSearch(search)}
+          containerStyle={styles.searchBarStandalone}
+          inputContainerStyle={{backgroundColor: '#EFEFEF'}}
+          round
+        />
+        <Button
+          title="Find Near Me"
+          onPress={findNearby}
+          icon={{ name: 'my-location', color: 'white' }}
+          buttonStyle={styles.findButton}
+        />
+        {isLoading && <ActivityIndicator size="large" color="#6A0DAD" />}
+      </View>
     );
-  };
-  
-  const goToMyLocation = () => {
-    if (userLocation) {
-      mapRef.current?.animateToRegion({ ...userLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 }, 1000);
-    } else {
-      getCurrentLocation();
-    }
-  };
+  }
 
-  const toggleFilter = (filter) => { setActiveFilters(prev => ({ ...prev, [filter]: !prev[filter] })); };
-
+  // --- This is the Map View (when map is visible) ---
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        initialRegion={initialRegion}
+        initialRegion={currentRegion}
         showsUserLocation={true}
-        onRegionChangeComplete={debouncedFetchPlaces}
+        onRegionChangeComplete={fetchPlaces}
       >
-       {filteredPlaces.map(marker => (
-         <Marker
-            key={marker.id}
-            coordinate={marker.coordinate}
-            title={marker.title}
-            description={marker.description}
-         >
-            <View style={[styles.markerContainer, {backgroundColor: marker.type === 'atm' ? '#007BFF' : marker.type === 'bank' ? '#28a745' : '#dc3545'}]}>
-               <Icon 
-                   name={ marker.type === 'atm' ? 'local-atm' : marker.type === 'bank' ? 'account-balance' : 'local-gas-station' } 
-                   size={22} 
-                   color="white" 
-               />
-            </View>
-         </Marker>
-       ))}
+        {places.map(marker => (<Marker key={marker.id} coordinate={marker.coordinate} /* ... */ />))}
       </MapView>
 
-      <View style={styles.header}>
-        <SearchBar
-          placeholder="Search for a city in Sri Lanka..."
-          onChangeText={setSearch}
-          value={search}
-          lightTheme
-          round
-          containerStyle={styles.searchBarContainer}
-          inputContainerStyle={styles.searchBarInput}
-          onSubmitEditing={handleSearch}
-        />
-      </View>
-
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6A0DAD" />
-          <Text>Finding places...</Text>
-        </View>
-      )}
-
-      <View style={styles.filterContainer}>
-        <Button
-          title="ATM"
-          onPress={() => toggleFilter('atm')}
-          icon={{ name: 'local-atm', color: activeFilters.atm ? 'white' : 'black' }}
-          buttonStyle={[styles.filterButton, activeFilters.atm && styles.filterButtonActive]}
-          titleStyle={{ color: activeFilters.atm ? 'white' : 'black' }}
-        />
-        <Button
-          title="Bank"
-          onPress={() => toggleFilter('bank')}
-          icon={{ name: 'account-balance', color: activeFilters.bank ? 'white' : 'black' }}
-          buttonStyle={[styles.filterButton, activeFilters.bank && styles.filterButtonActive]}
-          titleStyle={{ color: activeFilters.bank ? 'white' : 'black' }}
-        />
-        <Button
-          title="Fuel"
-          onPress={() => toggleFilter('fuel')}
-          icon={{ name: 'local-gas-station', color: activeFilters.fuel ? 'white' : 'black' }}
-          buttonStyle={[styles.filterButton, activeFilters.fuel && styles.filterButtonActive]}
-          titleStyle={{ color: activeFilters.fuel ? 'white' : 'black' }}
-        />
-      </View>
-
-      <TouchableOpacity style={styles.myLocationButton} onPress={goToMyLocation}>
-        <Icon name="my-location" color="black" />
+      <TouchableOpacity style={styles.backButton} onPress={() => setMapVisible(false)}>
+        <Icon name="arrow-back" size={24} color="#333" />
       </TouchableOpacity>
+
+      <FlatList
+        data={places}
+        renderItem={renderPlaceCard}
+        keyExtractor={item => item.id.toString()}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.carouselStyle}
+        contentContainerStyle={{ paddingHorizontal: 10 }}
+      />
+       {isLoading && <View style={styles.loadingOnMap}><ActivityIndicator size="large" color="#6A0DAD" /></View>}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  // --- Styles for both views ---
   container: { flex: 1 },
   map: { ...StyleSheet.absoluteFillObject },
-  markerContainer: {
-    padding: 8,
-    borderRadius: 24,
-    borderColor: 'white',
-    borderWidth: 2,
-    elevation: 5,
-  },
-  header: {
-    position: 'absolute',
-    top: 50,
-    left: 10,
-    right: 10,
-  },
-  searchBarContainer: {
+  loadingOnMap: { position: 'absolute', top: '50%', alignSelf: 'center' },
+  carouselStyle: { position: 'absolute', bottom: 30 },
+  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, height: 120, width: screenWidth * 0.7, marginRight: 10, justifyContent: 'space-between', elevation: 6 },
+  cardTitle: { fontSize: 16, fontWeight: 'bold' },
+  cardDescription: { fontSize: 13, color: '#444' },
+  directionsButton: { backgroundColor: '#6A0DAD', borderRadius: 8, paddingVertical: 5 },
+
+  // --- Styles for Search View ---
+  searchContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#F5F5F5'
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#6A0DAD',
+    marginBottom: 30,
+  },
+  searchBarStandalone: {
+    width: '100%',
     backgroundColor: 'transparent',
     borderTopWidth: 0,
     borderBottomWidth: 0,
+    paddingHorizontal: 0,
   },
-  searchBarInput: {
-    backgroundColor: '#fff',
+  findButton: {
+    backgroundColor: '#6A0DAD',
+    borderRadius: 30,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    marginTop: 20,
   },
-  filterContainer: {
+  backButton: {
     position: 'absolute',
-    bottom: 90,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    paddingVertical: 10,
-  },
-  filterButton: {
+    top: 60,
+    left: 20,
     backgroundColor: 'white',
     borderRadius: 20,
-    paddingHorizontal: 15,
-  },
-  filterButtonActive: {
-    backgroundColor: '#6A0DAD',
-  },
-  myLocationButton: {
-    position: 'absolute',
-    bottom: 30,
-    right: 20,
-    backgroundColor: 'white',
-    borderRadius: 30,
-    padding: 10,
+    padding: 8,
     elevation: 5,
-  },
-  loadingContainer: {
-    position: 'absolute',
-    top: '50%',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    padding: 20,
-    borderRadius: 10,
-    elevation: 6,
-  },
+  }
 });
 
 export default HomeScreen;

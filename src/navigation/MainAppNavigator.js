@@ -11,8 +11,8 @@ const MainAppNavigator = () => {
                 name="Home"
                 component={HomeScreen}
                 options={{
-                    title: 'GeoLocate Pro',
-                    headerTitleAlign: 'center', // Title එක මැදට ගන්න
+                    title: 'Waypoint',
+                    headerTitleAlign: 'center',
                 }}
             />
         </Stack.Navigator>
