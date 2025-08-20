@@ -6,133 +6,198 @@ import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
 import { SearchBar, Button, Icon } from '@rneui/themed';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
+const GOOGLE_API_KEY = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
 
 const HomeScreen = ({ navigation }) => {
   const mapRef = useRef(null);
-  
-  // --- NEW STATE: To control map visibility ---
+  const flatListRef = useRef(null);
+
   const [mapVisible, setMapVisible] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(null);
-
+  const [userLocation, setUserLocation] = useState(null);
   const [places, setPlaces] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [lastSearchedQuery, setLastSearchedQuery] = useState("");
 
-  const fetchPlaces = async (region) => {
+  useEffect(() => {
+    if (mapVisible && currentRegion) {
+      setIsLoading(true); 
+      fetchPlaces(currentRegion);
+    }
+  }, [mapVisible, currentRegion]);
+
+  const fetchPlaces = async (region, query = '') => {
     if (!region) return;
     setIsLoading(true);
-    const { latitude, longitude, latitudeDelta } = region;
-    const radius = Math.max(2000, (latitudeDelta * 111 * 1000) / 2); // Min 2km radius
-    const query = `[out:json][timeout:25];(node(around:${radius},${latitude},${longitude})["amenity"~"atm|bank|fuel"];);out center;`;
-    try {
-      const response = await axios.post('https://overpass-api.de/api/interpreter', `data=${encodeURIComponent(query)}`);
-      const newPlaces = response.data.elements.map(element => ({
-        id: element.id,
-        coordinate: { latitude: element.lat, longitude: element.lon },
-        title: element.tags?.name || element.tags.amenity.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        description: element.tags?.operator || 'Details not available',
-        type: element.tags.amenity,
-      }));
-      setPlaces(newPlaces);
-    } catch (error) {
-      console.error("Overpass API Error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleSearch = async (searchText) => {
-    const query = searchText || search;
-    if (query.trim() === "") return;
-    setIsLoading(true);
     setPlaces([]);
+    
     try {
-      const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc'; 
-      const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?address=${query}, Sri Lanka&key=${apiKey}`);
-      if (response.data.results.length > 0) {
-        const { lat, lng } = response.data.results[0].geometry.location;
-        const region = { latitude: lat, longitude: lng, latitudeDelta: 0.1, longitudeDelta: 0.1 };
-        setCurrentRegion(region);
-        setMapVisible(true); // Show the map
-        await fetchPlaces(region);
+      const { latitude, longitude } = region;
+      let url = '';
+      
+      if (query && query.trim() !== "") {
+        url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=20000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
       } else {
-        Alert.alert("Not Found", "Could not find the location.");
+        url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=3000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
+      }
+      
+      const response = await axios.get(url);
+      
+      if (response.data.status === 'OK') {
+        const placesData = response.data.results.map(place => ({
+          id: place.place_id,
+          coordinate: { latitude: place.geometry.location.lat, longitude: place.geometry.location.lng },
+          title: place.name,
+          description: place.vicinity,
+          type: place.types.includes('atm') ? 'atm' : place.types.includes('bank') ? 'bank' : 'gas_station',
+          rating: place.rating,
+          openNow: place.opening_hours?.open_now,
+        }));
+        setPlaces(placesData);
+      } else {
+        setPlaces([]);
+        if (response.data.status !== 'ZERO_RESULTS') {
+            Alert.alert("API Error", `Google Places API returned: ${response.data.status}. ${response.data.error_message || ''}`);
+        }
       }
     } catch (error) {
-      console.error("Geocoding API Error:", error);
+      console.error("Google Places API Error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const findNearby = () => {
-    const requestPermissionAndFetch = async () => {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert("Permission Denied");
-          return;
-        }
-      }
-      setIsLoading(true);
+  const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
       Geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
           const region = { latitude, longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 };
-          setCurrentRegion(region);
-          setMapVisible(true); // Show the map
-          fetchPlaces(region);
+          setUserLocation({ latitude, longitude });
+          resolve(region);
         },
-        (error) => {
-          setIsLoading(false);
-          Alert.alert("Error", "Could not get your location.");
-        },
+        (error) => reject(error),
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
       );
-    };
-    requestPermissionAndFetch();
+    });
+  };
+
+  const handleSearch = async () => {
+    const query = search.trim();
+    if (query === "") return;
+    setIsLoading(true);
+    setLastSearchedQuery(query);
+    
+    try {
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
+      const geocodeResponse = await axios.get(geocodeUrl);
+      if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
+        const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
+        const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+        setCurrentRegion(region);
+        setMapVisible(true);
+      } else {
+        Alert.alert("Not Found", "Could not find the location.");
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error("Search Error:", error);
+      setIsLoading(false);
+    }
+  };
+
+  const findNearby = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return Alert.alert("Permission Denied");
+      }
+      setIsLoading(true);
+      const region = await getCurrentLocation();
+      setCurrentRegion(region);
+      setLastSearchedQuery("");
+      setMapVisible(true);
+    } catch (error) {
+      setIsLoading(false);
+      Alert.alert("Error", "Could not get your location.");
+    }
+  };
+
+  const openDirections = (lat, lng) => {
+    const url = `google.navigation:q=${lat},${lng}`;
+    Linking.openURL(url).catch(() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`));
+  };
+  
+  const onCardPress = (item) => {
+    setSelectedPlace(item);
+    mapRef.current?.animateToRegion({ ...item.coordinate, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
+  };
+  
+  const onMarkerPress = (marker) => {
+      setSelectedPlace(marker);
+      const markerIndex = places.findIndex(p => p.id === marker.id);
+      if (flatListRef.current && markerIndex > -1) {
+        flatListRef.current.scrollToIndex({ index: markerIndex, animated: true, viewPosition: 0.5 });
+      }
   };
 
   const renderPlaceCard = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-      <Text style={styles.cardDescription} numberOfLines={1}>{item.description}</Text>
-      <Button
-        title="Get Directions"
-        onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
-        buttonStyle={styles.directionsButton}
-        titleStyle={{ fontSize: 14 }}
-      />
-    </View>
+    <TouchableOpacity 
+      style={[styles.card, selectedPlace?.id === item.id && styles.selectedCard]}
+      onPress={() => onCardPress(item)}
+    >
+      <View style={styles.cardHeader}>
+        <Icon name={getMarkerIcon(item.type)} size={20} color={getMarkerColor(item.type)} />
+        <View style={styles.cardTitleContainer}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          {item.rating && (<View style={styles.ratingContainer}><Icon name="star" size={14} color="#FFD700" /><Text style={styles.ratingText}>{item.rating}</Text></View>)}
+        </View>
+      </View>
+      <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
+      <View style={styles.cardFooter}>
+        {item.openNow !== undefined && (<Text style={[styles.statusText, item.openNow ? styles.openText : styles.closedText]}>{item.openNow ? 'Open Now' : 'Closed'}</Text>)}
+        <Button
+          title="Directions"
+          onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
+          buttonStyle={styles.directionsButton}
+          titleStyle={{ fontSize: 12, fontWeight: 'bold' }}
+          icon={{ name: 'directions', color: 'white', size: 14 }}
+        />
+      </View>
+    </TouchableOpacity>
   );
 
-  // --- NEW: This is the Search View (when map is not visible) ---
+  const getMarkerIcon = (type) => { return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station'; };
+  const getMarkerColor = (type) => { return type === 'atm' ? '#007BFF' : type === 'bank' ? '#28a745' : '#dc3545'; };
+
   if (!mapVisible) {
     return (
       <View style={styles.searchContainer}>
-        <Text style={styles.title}>Waypoint</Text>
-        <SearchBar
-          placeholder="Search for a city or place..."
-          onChangeText={setSearch}
-          value={search}
-          onSubmitEditing={() => handleSearch(search)}
-          containerStyle={styles.searchBarStandalone}
-          inputContainerStyle={{backgroundColor: '#EFEFEF'}}
-          round
-        />
-        <Button
-          title="Find Near Me"
-          onPress={findNearby}
-          icon={{ name: 'my-location', color: 'white' }}
-          buttonStyle={styles.findButton}
-        />
-        {isLoading && <ActivityIndicator size="large" color="#6A0DAD" />}
+        <View style={styles.header}>
+          <View style={styles.logo}><Icon name="map" size={28} color="#6A0DAD" /><Text style={styles.logoText}>Waypoint</Text></View>
+          <TouchableOpacity style={styles.locationTag} onPress={findNearby}><Icon name="location-on" size={16} color="#6A0DAD" /><Text style={styles.locationText}>{userLocation ? 'Your Location' : 'Sri Lanka'}</Text></TouchableOpacity>
+        </View>
+        <View style={styles.searchSection}>
+          <SearchBar placeholder="Search for a city in Sri Lanka..." onChangeText={setSearch} value={search} onSubmitEditing={handleSearch} containerStyle={styles.searchBarContainer} inputContainerStyle={styles.searchInputContainer} round />
+          <Text style={styles.orText}>- OR -</Text>
+          <Button title="Find Places Near Me" onPress={findNearby} icon={{ name: 'my-location', color: 'white', size: 20 }} buttonStyle={styles.findButton} titleStyle={styles.findButtonText} />
+        </View>
+        {isLoading && (<View style={styles.loadingContainer}><ActivityIndicator size="large" color="#6A0DAD" /><Text style={styles.loadingText}>Finding locations...</Text></View>)}
+        <View style={styles.featureSection}>
+          <Text style={styles.featureTitle}>Find What You Need</Text>
+          <View style={styles.featureGrid}>
+            <View style={styles.featureItem}><Icon name="local-atm" size={30} color="#007BFF" /><Text style={styles.featureText}>ATMs</Text></View>
+            <View style={styles.featureItem}><Icon name="account-balance" size={30} color="#28a745" /><Text style={styles.featureText}>Banks</Text></View>
+            <View style={styles.featureItem}><Icon name="local-gas-station" size={30} color="#dc3545" /><Text style={styles.featureText}>Fuel Stations</Text></View>
+          </View>
+        </View>
       </View>
     );
   }
 
-  // --- This is the Map View (when map is visible) ---
   return (
     <View style={styles.container}>
       <MapView
@@ -141,77 +206,295 @@ const HomeScreen = ({ navigation }) => {
         style={styles.map}
         initialRegion={currentRegion}
         showsUserLocation={true}
-        onRegionChangeComplete={fetchPlaces}
       >
-        {places.map(marker => (<Marker key={marker.id} coordinate={marker.coordinate} /* ... */ />))}
+        {places.map(marker => (
+          <Marker
+            key={marker.id}
+            coordinate={marker.coordinate}
+            onPress={() => onMarkerPress(marker)}
+          >
+            <View style={[ styles.markerContainer, {backgroundColor: getMarkerColor(marker.type)}, selectedPlace?.id === marker.id && styles.selectedMarker ]}>
+              <Icon name={getMarkerIcon(marker.type)} size={18} color="white" />
+            </View>
+          </Marker>
+        ))}
       </MapView>
-
-      <TouchableOpacity style={styles.backButton} onPress={() => setMapVisible(false)}>
+      <TouchableOpacity style={styles.backButton} onPress={() => {setMapVisible(false); setPlaces([]); setSearch("");}}>
         <Icon name="arrow-back" size={24} color="#333" />
       </TouchableOpacity>
-
-      <FlatList
-        data={places}
-        renderItem={renderPlaceCard}
-        keyExtractor={item => item.id.toString()}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.carouselStyle}
-        contentContainerStyle={{ paddingHorizontal: 10 }}
-      />
-       {isLoading && <View style={styles.loadingOnMap}><ActivityIndicator size="large" color="#6A0DAD" /></View>}
+      <View style={styles.searchOnMap}>
+        <SearchBar placeholder={lastSearchedQuery || "Search again..."} onChangeText={setSearch} value={search} onSubmitEditing={handleSearch} containerStyle={styles.mapSearchContainer} inputContainerStyle={styles.mapSearchInput} round />
+      </View>
+      {isLoading && (<View style={styles.mapLoading}><ActivityIndicator size="large" /><Text style={styles.mapLoadingText}>Loading...</Text></View>)}
+      {places.length > 0 && !isLoading && (
+        <FlatList
+          ref={flatListRef}
+          data={places}
+          renderItem={renderPlaceCard}
+          keyExtractor={item => item.id.toString()}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.carousel}
+          contentContainerStyle={{paddingRight: 20, paddingLeft: 10}}
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  // --- Styles for both views ---
-  container: { flex: 1 },
-  map: { ...StyleSheet.absoluteFillObject },
-  loadingOnMap: { position: 'absolute', top: '50%', alignSelf: 'center' },
-  carouselStyle: { position: 'absolute', bottom: 30 },
-  card: { backgroundColor: 'white', borderRadius: 12, padding: 15, height: 120, width: screenWidth * 0.7, marginRight: 10, justifyContent: 'space-between', elevation: 6 },
-  cardTitle: { fontSize: 16, fontWeight: 'bold' },
-  cardDescription: { fontSize: 13, color: '#444' },
-  directionsButton: { backgroundColor: '#6A0DAD', borderRadius: 8, paddingVertical: 5 },
-
-  // --- Styles for Search View ---
+  container: {
+    flex: 1,
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
   searchContainer: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#F5F5F5'
+    paddingTop: 50,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
   },
-  title: {
-    fontSize: 48,
+  logo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoText: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#6A0DAD',
-    marginBottom: 30,
+    marginLeft: 10,
   },
-  searchBarStandalone: {
-    width: '100%',
+  locationTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0E6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  locationText: {
+    color: '#6A0DAD',
+    fontSize: 14,
+    marginLeft: 5,
+  },
+  searchSection: {
+    padding: 20,
+    backgroundColor: 'white',
+    marginTop: 10,
+  },
+  searchBarContainer: {
     backgroundColor: 'transparent',
     borderTopWidth: 0,
     borderBottomWidth: 0,
-    paddingHorizontal: 0,
+    padding: 0,
+  },
+  searchInputContainer: {
+    backgroundColor: '#EFEFEF',
+    borderRadius: 30,
+    height: 50,
+  },
+  orText: {
+    textAlign: 'center',
+    marginVertical: 15,
+    color: '#888',
   },
   findButton: {
     backgroundColor: '#6A0DAD',
     borderRadius: 30,
     paddingVertical: 15,
-    paddingHorizontal: 30,
+    height: 50,
+  },
+  findButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#6A0DAD',
+  },
+  featureSection: {
     marginTop: 20,
+    padding: 20,
+    backgroundColor: 'white',
+  },
+  featureTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
+  },
+  featureGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  featureItem: {
+    alignItems: 'center',
+  },
+  featureText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#555',
   },
   backButton: {
     position: 'absolute',
-    top: 60,
-    left: 20,
+    top: 50,
+    left: 15,
     backgroundColor: 'white',
     borderRadius: 20,
     padding: 8,
     elevation: 5,
-  }
+    zIndex: 10,
+  },
+  markerContainer: {
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'white',
+    elevation: 5,
+  },
+  selectedMarker: {
+    borderColor: '#FFD700',
+    borderWidth: 3,
+  },
+  searchOnMap: {
+    position: 'absolute',
+    top: 50,
+    left: 60,
+    right: 15,
+    zIndex: 10,
+  },
+  mapSearchContainer: {
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    padding: 0,
+  },
+  mapSearchInput: {
+    backgroundColor: 'white',
+    borderRadius: 30,
+    height: 40,
+  },
+  carousel: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 15,
+    height: 160,
+    width: screenWidth * 0.7,
+    marginRight: 10,
+    justifyContent: 'space-between',
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#EEE',
+  },
+  selectedCard: {
+    borderColor: '#6A0DAD',
+    borderWidth: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  cardTitleContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  ratingText: {
+    fontSize: 12,
+    marginLeft: 4,
+    color: '#666',
+  },
+  cardDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 10,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  openText: {
+    color: '#28a745',
+  },
+  closedText: {
+    color: '#dc3545',
+  },
+  directionsButton: {
+    backgroundColor: '#6A0DAD',
+    borderRadius: 8,
+    paddingVertical: 5,
+    height: 30,
+    width: 100,
+  },
+  mapLoading: {
+    position: 'absolute',
+    top: '50%',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  mapLoadingText: {
+    marginTop: 10,
+    color: '#6A0DAD',
+  },
+  noResultsContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 20,
+    marginHorizontal: 20,
+    borderRadius: 10,
+  },
+  noResultsText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+    marginTop: 10,
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 5,
+  },
 });
 
 export default HomeScreen;

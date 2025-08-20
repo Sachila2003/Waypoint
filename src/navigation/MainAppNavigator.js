@@ -10,10 +10,7 @@ const MainAppNavigator = () => {
             <Stack.Screen
                 name="Home"
                 component={HomeScreen}
-                options={{
-                    title: 'Waypoint',
-                    headerTitleAlign: 'center',
-                }}
+                
             />
         </Stack.Navigator>
     );
