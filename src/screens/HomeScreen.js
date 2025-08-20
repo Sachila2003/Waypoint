@@ -24,10 +24,20 @@ const HomeScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (mapVisible && currentRegion) {
-      setIsLoading(true); 
-      fetchPlaces(currentRegion);
+      fetchPlaces(currentRegion, lastSearchedQuery);
     }
   }, [mapVisible, currentRegion]);
+  
+  // vvv ADD THIS NEW useEffect HOOK vvv
+  // This useEffect will run ONLY to animate the map
+  useEffect(() => {
+    // We only animate if the map is visible and we have a region to go to
+    if (mapVisible && currentRegion && mapRef.current) {
+      setTimeout(() => {
+        mapRef.current.animateToRegion(currentRegion, 1000); // Animate over 1 second
+      }, 250); // 250 milliseconds delay
+    }
+  }, [currentRegion]);
 
   const fetchPlaces = async (region, query = '') => {
     if (!region) return;
@@ -88,16 +98,20 @@ const HomeScreen = ({ navigation }) => {
   const handleSearch = async () => {
     const query = search.trim();
     if (query === "") return;
+    
     setIsLoading(true);
-    setLastSearchedQuery(query);
     
     try {
-      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
+      const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}+Sri+Lanka&key=${apiKey}`;
       const geocodeResponse = await axios.get(geocodeUrl);
+      
       if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
         const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
         const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+        
         setCurrentRegion(region);
+        setLastSearchedQuery(query);
         setMapVisible(true);
       } else {
         Alert.alert("Not Found", "Could not find the location.");
@@ -105,6 +119,7 @@ const HomeScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error("Search Error:", error);
+      Alert.alert("Error", "Could not find the location.");
       setIsLoading(false);
     }
   };
@@ -204,7 +219,7 @@ const HomeScreen = ({ navigation }) => {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        initialRegion={currentRegion}
+        region={currentRegion} 
         showsUserLocation={true}
       >
         {places.map(marker => (
