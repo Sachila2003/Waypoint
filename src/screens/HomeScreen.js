@@ -208,7 +208,7 @@ const HomeScreen = ({ navigation }) => {
   if (!mapVisible) {
     return (
       <View style={styles.searchContainer}> 
-        <View style={styles.header}>
+        {/* <View style={styles.header}>
           <View style={styles.logo}>
             <Icon name="map" type="material-community" size={28} color="#6A0DAD" />
             <Text style={styles.logoText}>Waypoint</Text>
@@ -219,7 +219,7 @@ const HomeScreen = ({ navigation }) => {
               {userLocation ? 'Your Location' : 'Sri Lanka'}
             </Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         <View style={styles.searchSection}>
           <SearchBar

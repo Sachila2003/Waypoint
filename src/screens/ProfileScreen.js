@@ -28,7 +28,6 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [user]);
 
-  // Simple implementation without image storage - just URL input
   const handleUpdateProfilePic = () => {
     Alert.prompt(
       'Update Profile Picture',
@@ -83,9 +82,9 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Text style={styles.headerTitle}>My Profile</Text>
-      </View>
+      </View> */}
 
       <View style={styles.profileSection}>
         <TouchableOpacity onPress={handleUpdateProfilePic} disabled={loading}>
