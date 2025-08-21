@@ -40,7 +40,7 @@ const MainAppNavigator = () => {
         component={HomeScreen} 
         options={({ navigation }) => ({
           headerTitle: () => <CustomHeaderTitle />,
-          headerLeft: () => null, // We remove the default back button
+          headerLeft: () => null, 
           headerRight: () => (
             <TouchableOpacity 
               onPress={() => navigation.navigate('Profile')}
