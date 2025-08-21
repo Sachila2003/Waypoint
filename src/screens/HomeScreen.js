@@ -22,73 +22,86 @@ const HomeScreen = ({ navigation }) => {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [lastSearchedQuery, setLastSearchedQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [activeFilters, setActiveFilters] = useState({ atm: true, bank: true, fuel: true });
+  const [filteredPlaces, setFilteredPlaces] = useState([]);
 
   useEffect(() => {
-    if (mapVisible && currentRegion) {
-      fetchPlaces(currentRegion, lastSearchedQuery);
-    }
-  }, [mapVisible, currentRegion]);
-
-  useEffect(() => {
-    if (mapVisible && currentRegion && mapRef.current) {
-      setTimeout(() => {
-        mapRef.current.animateToRegion(currentRegion, 1000);
-      }, 250);
-    }
-  }, [currentRegion]);
-
-    const fetchPlaces = async (region, query = '') => {
-      if (!region) return;
-      setIsLoading(true);
-      setPlaces([]);
-      
-      try {
-        const { latitude, longitude } = region;
-        let url = '';
-        
-        if (query && query.trim() !== "") {
-          url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=20000&key=${GOOGLE_API_KEY}`;
-        } else {
-          url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=3000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
+    const initialize = async () => {
+      if (Platform.OS === 'android') {
+        const hasPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        if (hasPermission) {
+          findNearby(false);
         }
-        
-        const response = await axios.get(url);
-        
-        if (response.data.status === 'OK') {
-          const placesData = response.data.results.map(place => ({
-            id: place.place_id,
-            coordinate: { latitude: place.geometry.location.lat, longitude: place.geometry.location.lng },
-            title: place.name,
-            description: place.vicinity,
-            type: place.types.includes('atm') ? 'atm' : place.types.includes('bank') ? 'bank' : 'gas_station',
-            rating: place.rating,
-            openNow: place.opening_hours?.open_now,
-          }));
-          
-          setPlaces(placesData);
-          
-          if (placesData.length > 0 && mapRef.current) {
-              setTimeout(() => {
-                  const coordinates = placesData.map(p => p.coordinate);
-                  mapRef.current.fitToCoordinates(coordinates, {
-                      edgePadding: { top: 150, right: 50, bottom: 200, left: 50 },
-                      animated: true,
-                  });
-              }, 500);
-          }
-          
-        } else {
-          setPlaces([]);
-          if (response.data.status === 'ZERO_RESULTS') {
-              Alert.alert("No Results", `No matching "${query || 'places'}" found in this area.`);
-          }
-        }
-      } catch (error) {
-        console.error("Google Places API Error:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
+    initialize();
+  }, []);
+
+  useEffect(() => {
+    const noFiltersActive = !activeFilters.atm && !activeFilters.bank && !activeFilters.fuel;
+
+    const newFilteredPlaces = places.filter(place => {
+      if (noFiltersActive) return true;
+      if (activeFilters.atm && place.type === 'atm') return true;
+      if (activeFilters.bank && place.type === 'bank') return true;
+      if (activeFilters.fuel && place.type === 'gas_station') return true;
+      return false;
+    });
+    setFilteredPlaces(newFilteredPlaces);
+  }, [activeFilters, places]);
+
+  const fetchPlaces = async (region, query = '') => {
+    if (!region) return;
+    setIsLoading(true);
+    setPlaces([]);
+
+    try {
+      const { latitude, longitude } = region;
+      let url = '';
+
+      if (query && query.trim() !== "") {
+        url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=20000&key=${GOOGLE_API_KEY}`;
+      } else {
+        url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=3000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
+      }
+
+      const response = await axios.get(url);
+
+      if (response.data.status === 'OK') {
+        const placesData = response.data.results.map(place => ({
+          id: place.place_id,
+          coordinate: { latitude: place.geometry.location.lat, longitude: place.geometry.location.lng },
+          title: place.name,
+          description: place.vicinity,
+          type: place.types.includes('atm') ? 'atm' : place.types.includes('bank') ? 'bank' : 'gas_station',
+          rating: place.rating,
+          openNow: place.opening_hours?.open_now,
+        }));
+
+        setPlaces(placesData);
+
+        if (placesData.length > 0 && mapRef.current) {
+          setTimeout(() => {
+            const coordinates = placesData.map(p => p.coordinate);
+            mapRef.current.fitToCoordinates(coordinates, {
+              edgePadding: { top: 150, right: 50, bottom: 200, left: 50 },
+              animated: true,
+            });
+          }, 500);
+        }
+
+      } else {
+        setPlaces([]);
+        if (response.data.status === 'ZERO_RESULTS') {
+          Alert.alert("No Results", `No matching "${query || 'places'}" found in this area.`);
+        }
+      }
+    } catch (error) {
+      console.error("Google Places API Error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const getCurrentLocation = () => {
     return new Promise((resolve, reject) => {
       Geolocation.getCurrentPosition(
@@ -107,26 +120,26 @@ const HomeScreen = ({ navigation }) => {
   const handleSearch = async () => {
     const locationQuery = search.trim();
     if (locationQuery === "") {
-        Alert.alert("Empty Search", "Please enter a location to search.");
-        return;
+      Alert.alert("Empty Search", "Please enter a location to search.");
+      return;
     }
     if (!selectedCategory) {
-        Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
-        return;
+      Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
+      return;
     }
 
     setIsLoading(true);
     const fullQuery = `${selectedCategory} in ${locationQuery}`;
     setLastSearchedQuery(fullQuery);
-    
+
     try {
       const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationQuery)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
       const geocodeResponse = await axios.get(geocodeUrl);
-      
+
       if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
         const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
         const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
-        
+
         setCurrentRegion(region);
         setMapVisible(true);
         fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
@@ -144,17 +157,23 @@ const HomeScreen = ({ navigation }) => {
     try {
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) return Alert.alert("Permission Denied");
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          return Alert.alert("Permission Denied");
+        }
       }
       setIsLoading(true);
       const region = await getCurrentLocation();
-      setCurrentRegion(region);
-      setLastSearchedQuery("");
-      setMapVisible(true);
-      fetchPlaces(region, selectedCategory);
+      await fetchPlaces(region); // Fetch places based on current location
+
+      if (showMap) {
+        setCurrentRegion(region);
+        setMapVisible(true);
+      }
     } catch (error) {
       setIsLoading(false);
       Alert.alert("Error", "Could not get your location.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -207,7 +226,7 @@ const HomeScreen = ({ navigation }) => {
 
   if (!mapVisible) {
     return (
-      <View style={styles.searchContainer}> 
+      <View style={styles.searchContainer}>
         {/* <View style={styles.header}>
           <View style={styles.logo}>
             <Icon name="map" type="material-community" size={28} color="#6A0DAD" />
@@ -242,7 +261,10 @@ const HomeScreen = ({ navigation }) => {
           />
         </View>
 
+
+
         {isLoading && (<View style={styles.loadingContainer}><ActivityIndicator size="large" color="#6A0DAD" /><Text style={styles.loadingText}>Finding locations...</Text></View>)}
+
 
         <View style={styles.featureSection}>
           <Text style={styles.featureTitle}>Find What You Need</Text>
@@ -271,7 +293,22 @@ const HomeScreen = ({ navigation }) => {
               <Text style={[styles.featureText, selectedCategory === 'fuel' && { color: '#6A0DAD' }]}>Fuel Stations</Text>
             </TouchableOpacity>
           </View>
+
         </View>
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#6A0DAD" style={{ marginTop: 20 }} />
+        ) : filteredPlaces.length > 0 ? (
+          <FlatList
+          data={filteredPlaces} 
+            renderItem={renderPlaceCard}
+            keyExtractor={item => item.id.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.carousel}
+          />
+        ) : (
+          <Text style={styles.noNearbyText}>No places found nearby. Try searching for a city.</Text>
+        )}
       </View>
     );
   }
@@ -404,6 +441,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: '#6A0DAD',
   },
+  homeCarousel: {
+    marginTop: 20,
+},
+noNearbyText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: '#888',
+    fontSize: 16,
+},
   featureSection: {
     marginTop: 20,
     padding: 20,
