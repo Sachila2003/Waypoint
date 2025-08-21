@@ -21,65 +21,74 @@ const HomeScreen = ({ navigation }) => {
   const [search, setSearch] = useState("");
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [lastSearchedQuery, setLastSearchedQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   useEffect(() => {
     if (mapVisible && currentRegion) {
       fetchPlaces(currentRegion, lastSearchedQuery);
     }
   }, [mapVisible, currentRegion]);
-  
-  // vvv ADD THIS NEW useEffect HOOK vvv
-  // This useEffect will run ONLY to animate the map
+
   useEffect(() => {
-    // We only animate if the map is visible and we have a region to go to
     if (mapVisible && currentRegion && mapRef.current) {
       setTimeout(() => {
-        mapRef.current.animateToRegion(currentRegion, 1000); // Animate over 1 second
-      }, 250); // 250 milliseconds delay
+        mapRef.current.animateToRegion(currentRegion, 1000);
+      }, 250);
     }
   }, [currentRegion]);
 
-  const fetchPlaces = async (region, query = '') => {
-    if (!region) return;
-    setIsLoading(true);
-    setPlaces([]);
-    
-    try {
-      const { latitude, longitude } = region;
-      let url = '';
+    const fetchPlaces = async (region, query = '') => {
+      if (!region) return;
+      setIsLoading(true);
+      setPlaces([]);
       
-      if (query && query.trim() !== "") {
-        url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=20000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
-      } else {
-        url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=3000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
-      }
-      
-      const response = await axios.get(url);
-      
-      if (response.data.status === 'OK') {
-        const placesData = response.data.results.map(place => ({
-          id: place.place_id,
-          coordinate: { latitude: place.geometry.location.lat, longitude: place.geometry.location.lng },
-          title: place.name,
-          description: place.vicinity,
-          type: place.types.includes('atm') ? 'atm' : place.types.includes('bank') ? 'bank' : 'gas_station',
-          rating: place.rating,
-          openNow: place.opening_hours?.open_now,
-        }));
-        setPlaces(placesData);
-      } else {
-        setPlaces([]);
-        if (response.data.status !== 'ZERO_RESULTS') {
-            Alert.alert("API Error", `Google Places API returned: ${response.data.status}. ${response.data.error_message || ''}`);
+      try {
+        const { latitude, longitude } = region;
+        let url = '';
+        
+        if (query && query.trim() !== "") {
+          url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=20000&key=${GOOGLE_API_KEY}`;
+        } else {
+          url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=3000&type=atm|bank|gas_station&key=${GOOGLE_API_KEY}`;
         }
+        
+        const response = await axios.get(url);
+        
+        if (response.data.status === 'OK') {
+          const placesData = response.data.results.map(place => ({
+            id: place.place_id,
+            coordinate: { latitude: place.geometry.location.lat, longitude: place.geometry.location.lng },
+            title: place.name,
+            description: place.vicinity,
+            type: place.types.includes('atm') ? 'atm' : place.types.includes('bank') ? 'bank' : 'gas_station',
+            rating: place.rating,
+            openNow: place.opening_hours?.open_now,
+          }));
+          
+          setPlaces(placesData);
+          
+          if (placesData.length > 0 && mapRef.current) {
+              setTimeout(() => {
+                  const coordinates = placesData.map(p => p.coordinate);
+                  mapRef.current.fitToCoordinates(coordinates, {
+                      edgePadding: { top: 150, right: 50, bottom: 200, left: 50 },
+                      animated: true,
+                  });
+              }, 500);
+          }
+          
+        } else {
+          setPlaces([]);
+          if (response.data.status === 'ZERO_RESULTS') {
+              Alert.alert("No Results", `No matching "${query || 'places'}" found in this area.`);
+          }
+        }
+      } catch (error) {
+        console.error("Google Places API Error:", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Google Places API Error:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+    };
   const getCurrentLocation = () => {
     return new Promise((resolve, reject) => {
       Geolocation.getCurrentPosition(
@@ -96,14 +105,22 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleSearch = async () => {
-    const query = search.trim();
-    if (query === "") return;
-    
+    const locationQuery = search.trim();
+    if (locationQuery === "") {
+        Alert.alert("Empty Search", "Please enter a location to search.");
+        return;
+    }
+    if (!selectedCategory) {
+        Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
+        return;
+    }
+
     setIsLoading(true);
+    const fullQuery = `${selectedCategory} in ${locationQuery}`;
+    setLastSearchedQuery(fullQuery);
     
     try {
-      const apiKey = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
-      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}+Sri+Lanka&key=${apiKey}`;
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationQuery)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
       const geocodeResponse = await axios.get(geocodeUrl);
       
       if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
@@ -111,15 +128,14 @@ const HomeScreen = ({ navigation }) => {
         const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
         
         setCurrentRegion(region);
-        setLastSearchedQuery(query);
         setMapVisible(true);
+        fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
       } else {
-        Alert.alert("Not Found", "Could not find the location.");
+        Alert.alert("Not Found", `Could not find "${locationQuery}".`);
         setIsLoading(false);
       }
     } catch (error) {
       console.error("Search Error:", error);
-      Alert.alert("Error", "Could not find the location.");
       setIsLoading(false);
     }
   };
@@ -135,6 +151,7 @@ const HomeScreen = ({ navigation }) => {
       setCurrentRegion(region);
       setLastSearchedQuery("");
       setMapVisible(true);
+      fetchPlaces(region, selectedCategory);
     } catch (error) {
       setIsLoading(false);
       Alert.alert("Error", "Could not get your location.");
@@ -145,22 +162,22 @@ const HomeScreen = ({ navigation }) => {
     const url = `google.navigation:q=${lat},${lng}`;
     Linking.openURL(url).catch(() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`));
   };
-  
+
   const onCardPress = (item) => {
     setSelectedPlace(item);
     mapRef.current?.animateToRegion({ ...item.coordinate, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
   };
-  
+
   const onMarkerPress = (marker) => {
-      setSelectedPlace(marker);
-      const markerIndex = places.findIndex(p => p.id === marker.id);
-      if (flatListRef.current && markerIndex > -1) {
-        flatListRef.current.scrollToIndex({ index: markerIndex, animated: true, viewPosition: 0.5 });
-      }
+    setSelectedPlace(marker);
+    const markerIndex = places.findIndex(p => p.id === marker.id);
+    if (flatListRef.current && markerIndex > -1) {
+      flatListRef.current.scrollToIndex({ index: markerIndex, animated: true, viewPosition: 0.5 });
+    }
   };
 
   const renderPlaceCard = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.card, selectedPlace?.id === item.id && styles.selectedCard]}
       onPress={() => onCardPress(item)}
     >
@@ -188,25 +205,64 @@ const HomeScreen = ({ navigation }) => {
   const getMarkerIcon = (type) => { return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station'; };
   const getMarkerColor = (type) => { return type === 'atm' ? '#007BFF' : type === 'bank' ? '#28a745' : '#dc3545'; };
 
+  // In the Search View's return block
   if (!mapVisible) {
     return (
       <View style={styles.searchContainer}>
         <View style={styles.header}>
           <View style={styles.logo}><Icon name="map" size={28} color="#6A0DAD" /><Text style={styles.logoText}>Waypoint</Text></View>
-          <TouchableOpacity style={styles.locationTag} onPress={findNearby}><Icon name="location-on" size={16} color="#6A0DAD" /><Text style={styles.locationText}>{userLocation ? 'Your Location' : 'Sri Lanka'}</Text></TouchableOpacity>
+          <View style={styles.locationTag}><Icon name="location-on" size={16} color="#6A0DAD" /><Text style={styles.locationText}>{userLocation ? 'Your Location' : 'Sri Lanka'}</Text></View>
         </View>
+
         <View style={styles.searchSection}>
-          <SearchBar placeholder="Search for a city in Sri Lanka..." onChangeText={setSearch} value={search} onSubmitEditing={handleSearch} containerStyle={styles.searchBarContainer} inputContainerStyle={styles.searchInputContainer} round />
+          <SearchBar
+            placeholder="Search for a city in Sri Lanka..."
+            onChangeText={setSearch}
+            value={search}
+            onSubmitEditing={handleSearch}
+            containerStyle={styles.searchBarContainer}
+            inputContainerStyle={styles.searchInputContainer}
+            round
+          />
           <Text style={styles.orText}>- OR -</Text>
-          <Button title="Find Places Near Me" onPress={findNearby} icon={{ name: 'my-location', color: 'white', size: 20 }} buttonStyle={styles.findButton} titleStyle={styles.findButtonText} />
+          <Button
+            title={search.trim() !== "" ? `Search for "${search}"` : "Find Places Near Me"}
+            onPress={search.trim() !== "" ? handleSearch : findNearby}
+
+            icon={{ name: search.trim() !== "" ? 'search' : 'my-location', color: 'white', size: 20 }}
+            buttonStyle={styles.findButton}
+            titleStyle={styles.findButtonText}
+          />
         </View>
+
         {isLoading && (<View style={styles.loadingContainer}><ActivityIndicator size="large" color="#6A0DAD" /><Text style={styles.loadingText}>Finding locations...</Text></View>)}
+
         <View style={styles.featureSection}>
           <Text style={styles.featureTitle}>Find What You Need</Text>
           <View style={styles.featureGrid}>
-            <View style={styles.featureItem}><Icon name="local-atm" size={30} color="#007BFF" /><Text style={styles.featureText}>ATMs</Text></View>
-            <View style={styles.featureItem}><Icon name="account-balance" size={30} color="#28a745" /><Text style={styles.featureText}>Banks</Text></View>
-            <View style={styles.featureItem}><Icon name="local-gas-station" size={30} color="#dc3545" /><Text style={styles.featureText}>Fuel Stations</Text></View>
+            <TouchableOpacity
+              style={[styles.featureItem, selectedCategory === 'atm' && styles.featureItemSelected]}
+              onPress={() => setSelectedCategory('atm')}
+            >
+              <Icon name="local-atm" size={30} color={selectedCategory === 'atm' ? '#6A0DAD' : '#007BFF'} />
+              <Text style={[styles.featureText, selectedCategory === 'atm' && { color: '#6A0DAD' }]}>ATMs</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.featureItem, selectedCategory === 'bank' && styles.featureItemSelected]}
+              onPress={() => setSelectedCategory('bank')}
+            >
+              <Icon name="account-balance" size={30} color={selectedCategory === 'bank' ? '#6A0DAD' : '#28a745'} />
+              <Text style={[styles.featureText, selectedCategory === 'bank' && { color: '#6A0DAD' }]}>Banks</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.featureItem, selectedCategory === 'fuel' && styles.featureItemSelected]}
+              onPress={() => setSelectedCategory('fuel')}
+            >
+              <Icon name="local-gas-station" size={30} color={selectedCategory === 'fuel' ? '#6A0DAD' : '#dc3545'} />
+              <Text style={[styles.featureText, selectedCategory === 'fuel' && { color: '#6A0DAD' }]}>Fuel Stations</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -219,7 +275,7 @@ const HomeScreen = ({ navigation }) => {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        region={currentRegion} 
+        region={currentRegion}
         showsUserLocation={true}
       >
         {places.map(marker => (
@@ -228,13 +284,13 @@ const HomeScreen = ({ navigation }) => {
             coordinate={marker.coordinate}
             onPress={() => onMarkerPress(marker)}
           >
-            <View style={[ styles.markerContainer, {backgroundColor: getMarkerColor(marker.type)}, selectedPlace?.id === marker.id && styles.selectedMarker ]}>
+            <View style={[styles.markerContainer, { backgroundColor: getMarkerColor(marker.type) }, selectedPlace?.id === marker.id && styles.selectedMarker]}>
               <Icon name={getMarkerIcon(marker.type)} size={18} color="white" />
             </View>
           </Marker>
         ))}
       </MapView>
-      <TouchableOpacity style={styles.backButton} onPress={() => {setMapVisible(false); setPlaces([]); setSearch("");}}>
+      <TouchableOpacity style={styles.backButton} onPress={() => { setMapVisible(false); setPlaces([]); setSearch(""); }}>
         <Icon name="arrow-back" size={24} color="#333" />
       </TouchableOpacity>
       <View style={styles.searchOnMap}>
@@ -250,7 +306,7 @@ const HomeScreen = ({ navigation }) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.carousel}
-          contentContainerStyle={{paddingRight: 20, paddingLeft: 10}}
+          contentContainerStyle={{ paddingRight: 20, paddingLeft: 10 }}
         />
       )}
     </View>
@@ -509,6 +565,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginTop: 5,
+  },
+  featureItemSelected: {
+    backgroundColor: '#F0E6FF',
+    borderRadius: 10,
+    transform: [{ scale: 1.1 }],
+  },
+  featureItem: {
+    padding: 10,
+    borderRadius: 10,
   },
 });
 
