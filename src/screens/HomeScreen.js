@@ -205,13 +205,20 @@ const HomeScreen = ({ navigation }) => {
   const getMarkerIcon = (type) => { return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station'; };
   const getMarkerColor = (type) => { return type === 'atm' ? '#007BFF' : type === 'bank' ? '#28a745' : '#dc3545'; };
 
-  // In the Search View's return block
   if (!mapVisible) {
     return (
-      <View style={styles.searchContainer}>
+      <View style={styles.searchContainer}> 
         <View style={styles.header}>
-          <View style={styles.logo}><Icon name="map" size={28} color="#6A0DAD" /><Text style={styles.logoText}>Waypoint</Text></View>
-          <View style={styles.locationTag}><Icon name="location-on" size={16} color="#6A0DAD" /><Text style={styles.locationText}>{userLocation ? 'Your Location' : 'Sri Lanka'}</Text></View>
+          <View style={styles.logo}>
+            <Icon name="map" type="material-community" size={28} color="#6A0DAD" />
+            <Text style={styles.logoText}>Waypoint</Text>
+          </View>
+          <TouchableOpacity style={styles.locationTag} onPress={findNearby}>
+            <Icon name="location-pin" type="material" size={16} color="#6A0DAD" />
+            <Text style={styles.locationText}>
+              {userLocation ? 'Your Location' : 'Sri Lanka'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.searchSection}>
