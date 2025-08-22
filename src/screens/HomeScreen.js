@@ -294,6 +294,51 @@ const HomeScreen = ({ navigation }) => {
       </View>
     </TouchableOpacity>
   );
+const renderMapCard = ({ item }) => (
+  <TouchableOpacity 
+    style={[
+      styles.mapCard,
+      selectedPlace?.id === item.id && styles.selectedMapCard
+    ]}
+    onPress={() => onCardPress(item)}
+  >
+    {item.photo && (
+      <Image source={{ uri: item.photo }} style={styles.mapCardImage} />
+    )}
+    <View style={styles.mapCardContent}>
+      <View style={styles.mapCardHeader}>
+        <Icon name={getMarkerIcon(item.type)} size={20} color={getMarkerColor(item.type)} />
+        <View style={styles.mapCardTitleContainer}>
+          <Text style={styles.mapCardTitle} numberOfLines={1}>{item.title}</Text>
+        </View>
+      </View>
+      <Text style={styles.mapCardDescription} numberOfLines={2}>{item.description}</Text>
+      {item.rating && (
+          <View style={styles.mapCardRatingContainer}>
+            <Icon name="star" size={14} color="#FFD700" />
+            <Text style={styles.mapCardRatingText}>{item.rating}</Text>
+            {item.totalRatings && (
+              <Text style={styles.mapCardRatingCount}>({item.totalRatings})</Text>
+            )}
+          </View>
+      )}
+      <View style={styles.mapCardFooter}>
+        {item.openNow !== undefined && (
+          <Text style={[styles.mapCardStatusText, item.openNow ? styles.openText : styles.closedText]}>
+            {item.openNow ? 'Open Now' : 'Closed'}
+          </Text>
+        )}
+        <Button
+          title="Directions"
+          onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
+          buttonStyle={styles.mapCardDirectionsButton}
+          titleStyle={{ fontSize: 12, fontWeight: 'bold' }}
+          icon={{ name: 'directions', color: 'white', size: 14 }}
+        />
+      </View>
+    </View>
+  </TouchableOpacity>
+);
 
   const getMarkerIcon = (type) => { 
     return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station'; 
@@ -488,12 +533,12 @@ const HomeScreen = ({ navigation }) => {
         <FlatList
           ref={flatListRef}
           data={places}
-          renderItem={renderPlaceCard}
+          renderItem={renderMapCard}
           keyExtractor={item => item.id.toString()}
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.carousel}
-          contentContainerStyle={styles.carouselContent}
+          style={styles.mapCarousel}
+          contentContainerStyle={styles.mapCarouselContent}
         />
       )}
     </View>
@@ -760,6 +805,88 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     height: 32,
+  },
+  mapCarousel: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+  },
+  mapCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    width: screenWidth * 0.80,
+    height: 250,
+    marginRight: 15,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    overflow: 'hidden',
+  },
+  selectedMapCard: {
+    borderColor: '#6A0DAD',
+    borderWidth: 2.5,
+  },
+  mapCardImage: {
+    width: '100%',
+    height: 120,
+  },
+  mapCardContent: {
+    padding: 12,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  mapCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mapCardTitleContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  mapCardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  mapCardDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginVertical: 4,
+},
+  mapCardRatingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  mapCardRatingText: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 4,
+    color: '#555',
+  },
+  mapCardRatingCount: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 4,
+  },
+  mapCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  mapCardStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  mapCardDirectionsButton: {
+    backgroundColor: '#6A0DAD',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    height: 35,
   },
   backButton: {
     position: 'absolute',
