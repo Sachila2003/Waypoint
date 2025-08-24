@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import { launchImageLibrary } from 'react-native-image-picker';
+import storage from '@react-native-firebase/storage';
 
 
 const ProfileScreen = ({ navigation }) => {
@@ -28,35 +30,52 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [user]);
 
-  const handleUpdateProfilePic = () => {
-    Alert.prompt(
-      'Update Profile Picture',
-      'Enter image URL:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'OK',
-          onPress: async (url) => {
-            if (url) {
-              setLoading(true);
-              try {
-                await user.updateProfile({ photoURL: url });
-                setProfilePic({ uri: url });
-                Alert.alert('Success', 'Profile picture updated!');
-              } catch (error) {
-                Alert.alert('Error', 'Failed to update profile picture: ' + error.message);
-              }
-              setLoading(false);
-            }
-          },
-        },
-      ],
-      'plain-text',
-      user?.photoURL || '',
-      'url'
-    );
-  };
+  const handleUpdateProfilePic = async () => {
+    const options = {
+      mediaType: 'photo',
+      quality: 1,
+    };
 
+    launchImageLibrary(options, async (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled image picker');
+      } else if (response.errorCode) {
+        console.log('ImagePicker Error: ', response.errorMessage);
+      } else {
+        const imageUri = response.assets[0].uri;
+        if (!imageUri) {
+          Alert.alert('Error', 'Could not get the image path.');
+          return;
+        }
+
+        setLoading(true);
+
+        const filename = imageUri.substring(imageUri.lastIndexOf('/') + 1);
+        const storageRef = storage().ref(`profile_pictures/${user.uid}/${filename}`);
+
+        try {
+          // Firebase Storage ekt image ek upload krnw
+          await storageRef.putFile(imageUri);
+
+          // Upload krt psse  download URL ek gnnw
+          const url = await storageRef.getDownloadURL();
+
+          // User ge profile ek update krnw aluth  URL eken
+          await user.updateProfile({ photoURL: url });
+
+          // State ek update krl UI eke pennw
+          setProfilePic({ uri: url });
+
+          Alert.alert('Success', 'Profile picture updated successfully!');
+        } catch (error) {
+          console.error(error);
+          Alert.alert('Error', 'Failed to upload profile picture.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
   const handleUpdateProfile = async () => {
     setLoading(true);
     try {

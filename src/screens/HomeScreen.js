@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIn
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
+import firestore from '@react-native-firebase/firestore';
 import { SearchBar, Button, Icon } from '@rneui/themed';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -190,6 +191,22 @@ const HomeScreen = ({ navigation }) => {
 
         setCurrentRegion(region);
         setMapVisible(true);
+        //save search history
+        const user = auth().currentUser;
+        if(user){
+          firestore()
+          .collection('userHistory')
+          .doc(user.uid)
+          .collection('searches')
+          .add({
+            query: fullQuery,
+            region: region,
+            timestamp: firestore.FieldValue.serverTimestamp(),
+          })
+          .then(() => {
+            console.log('Search history saved!')
+          })
+        }
         fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
       } else {
         Alert.alert("Not Found", `Could not find "${locationQuery}".`);
