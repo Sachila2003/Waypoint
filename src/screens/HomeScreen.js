@@ -4,6 +4,7 @@ import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
 import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { SearchBar, Button, Icon } from '@rneui/themed';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -191,7 +192,8 @@ const HomeScreen = ({ navigation }) => {
 
         setCurrentRegion(region);
         setMapVisible(true);
-        //save search history
+        
+        // Save search history
         const user = auth().currentUser;
         if(user){
           firestore()
@@ -206,7 +208,11 @@ const HomeScreen = ({ navigation }) => {
           .then(() => {
             console.log('Search history saved!')
           })
+          .catch(error => {
+            console.log('Error saving search history:', error);
+          });
         }
+        
         fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
       } else {
         Alert.alert("Not Found", `Could not find "${locationQuery}".`);
@@ -311,51 +317,52 @@ const HomeScreen = ({ navigation }) => {
       </View>
     </TouchableOpacity>
   );
-const renderMapCard = ({ item }) => (
-  <TouchableOpacity 
-    style={[
-      styles.mapCard,
-      selectedPlace?.id === item.id && styles.selectedMapCard
-    ]}
-    onPress={() => onCardPress(item)}
-  >
-    {item.photo && (
-      <Image source={{ uri: item.photo }} style={styles.mapCardImage} />
-    )}
-    <View style={styles.mapCardContent}>
-      <View style={styles.mapCardHeader}>
-        <Icon name={getMarkerIcon(item.type)} size={20} color={getMarkerColor(item.type)} />
-        <View style={styles.mapCardTitleContainer}>
-          <Text style={styles.mapCardTitle} numberOfLines={1}>{item.title}</Text>
+
+  const renderMapCard = ({ item }) => (
+    <TouchableOpacity 
+      style={[
+        styles.mapCard,
+        selectedPlace?.id === item.id && styles.selectedMapCard
+      ]}
+      onPress={() => onCardPress(item)}
+    >
+      {item.photo && (
+        <Image source={{ uri: item.photo }} style={styles.mapCardImage} />
+      )}
+      <View style={styles.mapCardContent}>
+        <View style={styles.mapCardHeader}>
+          <Icon name={getMarkerIcon(item.type)} size={20} color={getMarkerColor(item.type)} />
+          <View style={styles.mapCardTitleContainer}>
+            <Text style={styles.mapCardTitle} numberOfLines={1}>{item.title}</Text>
+          </View>
+        </View>
+        <Text style={styles.mapCardDescription} numberOfLines={2}>{item.description}</Text>
+        {item.rating && (
+            <View style={styles.mapCardRatingContainer}>
+              <Icon name="star" size={14} color="#FFD700" />
+              <Text style={styles.mapCardRatingText}>{item.rating}</Text>
+              {item.totalRatings && (
+                <Text style={styles.mapCardRatingCount}>({item.totalRatings})</Text>
+              )}
+            </View>
+        )}
+        <View style={styles.mapCardFooter}>
+          {item.openNow !== undefined && (
+            <Text style={[styles.mapCardStatusText, item.openNow ? styles.openText : styles.closedText]}>
+              {item.openNow ? 'Open Now' : 'Closed'}
+            </Text>
+          )}
+          <Button
+            title="Directions"
+            onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
+            buttonStyle={styles.mapCardDirectionsButton}
+            titleStyle={{ fontSize: 12, fontWeight: 'bold' }}
+            icon={{ name: 'directions', color: 'white', size: 14 }}
+          />
         </View>
       </View>
-      <Text style={styles.mapCardDescription} numberOfLines={2}>{item.description}</Text>
-      {item.rating && (
-          <View style={styles.mapCardRatingContainer}>
-            <Icon name="star" size={14} color="#FFD700" />
-            <Text style={styles.mapCardRatingText}>{item.rating}</Text>
-            {item.totalRatings && (
-              <Text style={styles.mapCardRatingCount}>({item.totalRatings})</Text>
-            )}
-          </View>
-      )}
-      <View style={styles.mapCardFooter}>
-        {item.openNow !== undefined && (
-          <Text style={[styles.mapCardStatusText, item.openNow ? styles.openText : styles.closedText]}>
-            {item.openNow ? 'Open Now' : 'Closed'}
-          </Text>
-        )}
-        <Button
-          title="Directions"
-          onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
-          buttonStyle={styles.mapCardDirectionsButton}
-          titleStyle={{ fontSize: 12, fontWeight: 'bold' }}
-          icon={{ name: 'directions', color: 'white', size: 14 }}
-        />
-      </View>
-    </View>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  );
 
   const getMarkerIcon = (type) => { 
     return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station'; 
@@ -375,19 +382,6 @@ const renderMapCard = ({ item }) => (
   if (!mapVisible) {
     return (
       <View style={styles.searchContainer}>
-        {/* <View style={styles.header}>
-          <View style={styles.logo}>
-            <Icon name="map" type="material-community" size={32} color="#6A0DAD" />
-            <Text style={styles.logoText}>Waypoint Sri Lanka</Text>
-          </View>
-          <TouchableOpacity style={styles.locationTag} onPress={() => findNearby(false)}>
-            <Icon name="my-location" size={16} color="#6A0DAD" />
-            <Text style={styles.locationText}>
-              {userLocation ? 'Your Location' : 'Detect Location'}
-            </Text>
-          </TouchableOpacity>
-        </View> */}
-
         <View style={styles.searchSection}>
           <SearchBar
             ref={searchRef}
@@ -664,7 +658,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 20,
-    color: '##333',
+    color: '#333',
     textAlign: 'center',
   },
   featureGrid: {
@@ -737,7 +731,6 @@ const styles = StyleSheet.create({
   },
   carouselContent: {
     paddingHorizontal: 10,
-    
     height: screenHeight * 0.32,
   },
   card: {
@@ -872,7 +865,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginVertical: 4,
-},
+  },
   mapCardRatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',

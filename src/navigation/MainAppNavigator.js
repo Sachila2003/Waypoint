@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 import { useLocation } from '../contexts/LocationContext';
 import { TouchableOpacity, View, Text, StyleSheet, Modal, SafeAreaView } from 'react-native';
 import { Icon } from '@rneui/themed';
@@ -62,7 +64,16 @@ const BurgerMenu = ({ navigation, isVisible, onClose }) => {
                             <Icon name="person" type="material" size={24} color="#333" />
                             <Text style={styles.menuText}>Profile</Text>
                         </TouchableOpacity>
-                        {/* Add more menu items as needed */}
+                        <TouchableOpacity 
+                            style={styles.menuItem}
+                            onPress={() => {
+                                onClose();
+                                navigation.navigate('History');
+                            }}
+                        >
+                            <Icon name="history" type="material" size={24} color="#333" />
+                            <Text style={styles.menuText}>History</Text>
+                        </TouchableOpacity>
                     </View>
                 </SafeAreaView>
             </TouchableOpacity>
@@ -70,65 +81,11 @@ const BurgerMenu = ({ navigation, isVisible, onClose }) => {
     );
 };
 
+// Main App Navigator
 const MainAppNavigator = () => {
     const [menuVisible, setMenuVisible] = useState(false);
+    const navigation = useNavigation(); // Use the hook inside the component
 
-    return (
-        <Stack.Navigator
-            screenOptions={{
-                headerTitleAlign: 'center',
-                headerStyle: {
-                    backgroundColor: 'white',
-                },
-                headerTintColor: '#333',
-            }}
-        >
-            <Stack.Screen 
-                name="Home" 
-                component={HomeScreen} 
-                options={({ navigation }) => ({
-                    headerTitle: () => <CustomHeaderTitle />,
-                    headerLeft: () => (
-                        <TouchableOpacity 
-                            onPress={() => setMenuVisible(true)}
-                            style={{ marginLeft: 15 }}
-                        >
-                            <Icon name="menu" type="material" size={28} color="#6A0DAD" />
-                        </TouchableOpacity>
-                    ),
-                    headerRight: () => (
-                        <TouchableOpacity 
-                            onPress={() => navigation.navigate('Profile')}
-                            style={{ marginRight: 15 }}
-                        >
-                            <Icon name="person-circle-outline" type="ionicon" size={28} color="#6A0DAD" />
-                        </TouchableOpacity>
-                    ),
-                })} 
-            />
-            <Stack.Screen 
-                name="Profile" 
-                component={ProfileScreen} 
-                options={({ navigation }) => ({
-                    title: 'My Profile',
-                    headerLeft: () => (
-                        <TouchableOpacity 
-                            onPress={() => setMenuVisible(true)}
-                            style={{ marginLeft: 15 }}
-                        >
-                            <Icon name="menu" type="material" size={28} color="#6A0DAD" />
-                        </TouchableOpacity>
-                    ),
-                })}
-            />
-        </Stack.Navigator>
-    );
-};
-
-// Create a wrapper component to handle the navigation and menu state
-const AppWithMenu = () => {
-    const [menuVisible, setMenuVisible] = useState(false);
-    
     return (
         <>
             <Stack.Navigator
@@ -143,7 +100,7 @@ const AppWithMenu = () => {
                 <Stack.Screen 
                     name="Home" 
                     component={HomeScreen} 
-                    options={({ navigation }) => ({
+                    options={{
                         headerTitle: () => <CustomHeaderTitle />,
                         headerLeft: () => (
                             <TouchableOpacity 
@@ -161,12 +118,12 @@ const AppWithMenu = () => {
                                 <Icon name="person-circle-outline" type="ionicon" size={28} color="#6A0DAD" />
                             </TouchableOpacity>
                         ),
-                    })} 
+                    }} 
                 />
                 <Stack.Screen 
                     name="Profile" 
                     component={ProfileScreen} 
-                    options={({ navigation }) => ({
+                    options={{
                         title: 'My Profile',
                         headerLeft: () => (
                             <TouchableOpacity 
@@ -176,25 +133,32 @@ const AppWithMenu = () => {
                                 <Icon name="menu" type="material" size={28} color="#6A0DAD" />
                             </TouchableOpacity>
                         ),
-                    })}
+                    }}
+                />
+                <Stack.Screen 
+                    name="History" 
+                    component={HistoryScreen} 
+                    options={{
+                        title: 'History',
+                        headerLeft: () => (
+                            <TouchableOpacity 
+                                onPress={() => setMenuVisible(true)}
+                                style={{ marginLeft: 15 }}
+                            >
+                                <Icon name="menu" type="material" size={28} color="#6A0DAD" />
+                            </TouchableOpacity>
+                        ),
+                    }}
                 />
             </Stack.Navigator>
             
+            {/* Burger Menu with navigation prop */}
             <BurgerMenu 
-                navigation={useNavigation()} 
+                navigation={navigation}
                 isVisible={menuVisible} 
                 onClose={() => setMenuVisible(false)} 
             />
         </>
-    );
-};
-
-// Alternative solution: Create a component that uses navigation in the correct context
-const MainAppNavigatorWithMenu = () => {
-    return (
-        <NavigationContainer>
-            <AppWithMenu />
-        </NavigationContainer>
     );
 };
 
@@ -246,5 +210,4 @@ const styles = StyleSheet.create({
     },
 });
 
-// Export the correct component based on your needs
 export default MainAppNavigator;
