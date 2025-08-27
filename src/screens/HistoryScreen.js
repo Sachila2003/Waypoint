@@ -1,4 +1,3 @@
-// src/screens/HistoryScreen.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import auth from '@react-native-firebase/auth';
@@ -48,9 +47,14 @@ const HistoryScreen = ({ navigation }) => {
           </View>
       )
   }
+  const handleHistoryItemPress = (item) => {
+    navigation.navigate('Home', { searchQuery: item.query});
+  };
 
   const renderHistoryItem = ({ item }) => (
-    <TouchableOpacity style={styles.itemContainer}>
+    <TouchableOpacity style={styles.itemContainer}
+    onPress={() => handleHistoryItemPress(item)}
+    >
         <Icon name="search" size={20} color="#555" style={styles.icon}/>
         <View style={styles.textContainer}>
             <Text style={styles.queryText}>{item.query}</Text>
