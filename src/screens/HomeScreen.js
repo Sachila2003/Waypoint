@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity, Linking, Dimensions, FlatList, Image } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import axios from 'axios';
@@ -11,6 +12,8 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const GOOGLE_API_KEY = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
 
 const HomeScreen = ({ navigation }) => {
+  const route = useRoute();
+  const [searchQuery, setSearchQuery] = useState('');
   const mapRef = useRef(null);
   const flatListRef = useRef(null);
   const searchRef = useRef(null);
@@ -69,6 +72,14 @@ const HomeScreen = ({ navigation }) => {
       searchRef.current.focus();
     }
   }, [selectedCategory]);
+
+  useEffect(() => {
+    if (route.params?.searchQuery) {
+      const newQueryFromHistory = route.params.searchQuery;
+      handleSearchFromHistory(newQueryFromHistory); 
+      navigation.setParams({ searchQuery: undefined }); 
+    }
+  }, [route.params?.searchQuery]);
 
   const filterPlaces = () => {
     const noFiltersActive = !activeFilters.atm && !activeFilters.bank && !activeFilters.fuel;
@@ -167,9 +178,13 @@ const HomeScreen = ({ navigation }) => {
     });
   };
 
+const executeSearch = (searchTerm) => {
+  console.log("Executing search for: ", searchTerm);
+}
+
   const handleSearch = async () => {
     const locationQuery = search.trim();
-    if (locationQuery === "") {
+    if (!searchQuery || searchQuery.trim() === '') {
       Alert.alert("Empty Search", "Please enter a location to search.");
       return;
     }
@@ -223,6 +238,11 @@ const HomeScreen = ({ navigation }) => {
       setIsLoading(false);
     }
   };
+  const handleSearchFromHistory = (queryFromHistory) => {
+    setSearchQuery(queryFromHistory);
+    console.log("Search from history for: ", queryFromHistory);
+    handleSearch();
+  }
 
   const findNearby = async (showMap = true) => {
     try {
