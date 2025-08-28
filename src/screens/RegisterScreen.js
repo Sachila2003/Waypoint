@@ -82,178 +82,393 @@ const RegisterScreen = ({ onRegisterSuccess = () => {}, onNavigateToLogin = () =
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.container}>
-                <ScrollView contentContainerStyle={styles.scrollContentContainer} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                    <View style={styles.logoContainer}><View style={styles.logoPlaceholderSmall}><Text style={styles.logoText}>LOGO</Text></View></View>
-                    <Text style={styles.title}>Create an account</Text>
-                    <Text style={styles.subtitle}>Join GeoLocate Pro and start exploring</Text>
-                    
-                    <Text style={styles.inputLabel}>Full Name</Text>
-                    <View style={styles.inputWrapper}><TextInput style={styles.input} placeholder="Enter your full name" value={fullName} onChangeText={setFullName} placeholderTextColor="#A0A0A0" selectionColor={'#6A0DAD'}/></View>
-                    <Text style={styles.inputLabel}>Username</Text>
-                    <View style={styles.inputWrapper}><TextInput style={styles.input} placeholder="Enter your username" value={username} onChangeText={setUsername} autoCapitalize="none" placeholderTextColor="#A0A0A0" selectionColor={'#6A0DAD'}/></View>
-                    <Text style={styles.inputLabel}>Email</Text>
-                    <View style={styles.inputWrapper}><TextInput style={styles.input} placeholder="Enter your email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor="#A0A0A0" selectionColor={'#6A0DAD'}/></View>
-                    <Text style={styles.inputLabel}>Mobile Number</Text>
-                    <View style={styles.inputWrapper}><TextInput style={styles.input} placeholder="Enter your mobile number" value={mobileNumber} onChangeText={setMobileNumber} keyboardType="phone-pad" placeholderTextColor="#A0A0A0" selectionColor={'#6A0DAD'}/></View>
-                    <Text style={styles.inputLabel}>Password</Text>
-                    <View style={styles.inputWrapper}><TextInput style={styles.input} placeholder="Create a password" value={password} onChangeText={setPassword} secureTextEntry={!isPasswordVisible} selectionColor={'#6A0DAD'}/><TouchableOpacity style={styles.eyeIconContainer} onPress={() => setIsPasswordVisible(!isPasswordVisible)}><Icon name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} size={22} color="#707070"/></TouchableOpacity></View>
-                    <Text style={styles.inputLabel}>Confirm Password</Text>
-                    <View style={styles.inputWrapper}><TextInput style={styles.input} placeholder="Confirm your password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!isConfirmPasswordVisible} selectionColor={'#6A0DAD'}/><TouchableOpacity style={styles.eyeIconContainer} onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}><Icon name={isConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"} size={22} color="#707070"/></TouchableOpacity></View>
-                    
-                    <TouchableOpacity style={styles.registerButton} onPress={handleRegister} disabled={isRegisterLoading}>
-                        {isRegisterLoading ? <ActivityIndicator size="small" color="#FFFFFF"/> : <Text style={styles.registerButtonText}>Sign Up</Text>}
-                    </TouchableOpacity>
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === "ios" ? "padding" : "height"} 
+                style={styles.container}
+            >
+                <ScrollView 
+                    contentContainerStyle={styles.scrollContentContainer} 
+                    keyboardShouldPersistTaps="handled" 
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.logoContainer}>
+                        <View style={styles.logoWrapper}>
+                            <Icon name="map-marker-radius" size={40} color="#6A0DAD" />
+                            <Text style={styles.appName}>Waypoint</Text>
+                        </View>
+                    </View>
 
-                    {/* Dummy Social Buttons */}
-                    <Text style={styles.orContinueText}>or sign up with</Text>
-                    <TouchableOpacity style={[styles.socialButton, styles.googleButton]} onPress={onGoogleButtonPress} disabled={isGoogleLoading}><Icon name="google" size={20} color="#DB4437" style={styles.socialIcon}/>{isGoogleLoading ? <ActivityIndicator size="small" color="#DB4437"/> : <Text style={styles.socialButtonText}>Sign up with Google</Text>}</TouchableOpacity>
-                    {Platform.OS === 'ios' && (<TouchableOpacity style={[styles.socialButton, styles.appleButton]} onPress={handleDummyAppleSignUp} disabled={isAppleLoading}><Icon name="apple" size={22} color="#000000" style={styles.socialIcon}/>{isAppleLoading ? <ActivityIndicator size="small" color="#000000"/> : <Text style={styles.socialButtonText}>Sign up with Apple</Text>}</TouchableOpacity>)}
-                    <TouchableOpacity style={styles.loginLinkContainer} onPress={onNavigateToLogin}><Text style={styles.loginLinkText}>Already have an account? <Text style={styles.loginLinkTextBold}>Sign In</Text></Text></TouchableOpacity>
+                    <View style={styles.headerContainer}>
+                        <Text style={styles.title}>Create Account</Text>
+                        <Text style={styles.subtitle}>Join us and start exploring the world</Text>
+                    </View>
+
+                    <View style={styles.formContainer}>
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Full Name</Text>
+                            <View style={styles.inputWrapper}>
+                                <Icon name="account-outline" size={20} color="#6A0DAD" style={styles.inputIcon} />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="Enter your full name" 
+                                    value={fullName} 
+                                    onChangeText={setFullName} 
+                                    placeholderTextColor="#A0A0A0" 
+                                    selectionColor={'#6A0DAD'}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Username</Text>
+                            <View style={styles.inputWrapper}>
+                                <Icon name="account-circle-outline" size={20} color="#6A0DAD" style={styles.inputIcon} />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="Enter your username" 
+                                    value={username} 
+                                    onChangeText={setUsername} 
+                                    autoCapitalize="none" 
+                                    placeholderTextColor="#A0A0A0" 
+                                    selectionColor={'#6A0DAD'}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Email</Text>
+                            <View style={styles.inputWrapper}>
+                                <Icon name="email-outline" size={20} color="#6A0DAD" style={styles.inputIcon} />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="Enter your email" 
+                                    value={email} 
+                                    onChangeText={setEmail} 
+                                    keyboardType="email-address" 
+                                    autoCapitalize="none" 
+                                    placeholderTextColor="#A0A0A0" 
+                                    selectionColor={'#6A0DAD'}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Mobile Number</Text>
+                            <View style={styles.inputWrapper}>
+                                <Icon name="phone-outline" size={20} color="#6A0DAD" style={styles.inputIcon} />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="Enter your mobile number" 
+                                    value={mobileNumber} 
+                                    onChangeText={setMobileNumber} 
+                                    keyboardType="phone-pad" 
+                                    placeholderTextColor="#A0A0A0" 
+                                    selectionColor={'#6A0DAD'}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Password</Text>
+                            <View style={styles.inputWrapper}>
+                                <Icon name="lock-outline" size={20} color="#6A0DAD" style={styles.inputIcon} />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="Create a password" 
+                                    value={password} 
+                                    onChangeText={setPassword} 
+                                    secureTextEntry={!isPasswordVisible} 
+                                    selectionColor={'#6A0DAD'}
+                                />
+                                <TouchableOpacity 
+                                    style={styles.eyeIconContainer} 
+                                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                                >
+                                    <Icon 
+                                        name={isPasswordVisible ? "eye-off-outline" : "eye-outline"} 
+                                        size={22} 
+                                        color="#707070"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Confirm Password</Text>
+                            <View style={styles.inputWrapper}>
+                                <Icon name="lock-check-outline" size={20} color="#6A0DAD" style={styles.inputIcon} />
+                                <TextInput 
+                                    style={styles.input} 
+                                    placeholder="Confirm your password" 
+                                    value={confirmPassword} 
+                                    onChangeText={setConfirmPassword} 
+                                    secureTextEntry={!isConfirmPasswordVisible} 
+                                    selectionColor={'#6A0DAD'}
+                                />
+                                <TouchableOpacity 
+                                    style={styles.eyeIconContainer} 
+                                    onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
+                                >
+                                    <Icon 
+                                        name={isConfirmPasswordVisible ? "eye-off-outline" : "eye-outline"} 
+                                        size={22} 
+                                        color="#707070"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity 
+                            style={[styles.registerButton, isRegisterLoading && styles.buttonDisabled]} 
+                            onPress={handleRegister} 
+                            disabled={isRegisterLoading}
+                        >
+                            {isRegisterLoading ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <Text style={styles.registerButtonText}>Create Account</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Divider */}
+                    <View style={styles.dividerContainer}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>or continue with</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    {/* Social Login Section */}
+                    <View style={styles.socialContainer}>
+                        <TouchableOpacity 
+                            style={[styles.socialButton, styles.googleButton, isGoogleLoading && styles.buttonDisabled]} 
+                            onPress={onGoogleButtonPress} 
+                            disabled={isGoogleLoading}
+                        >
+                            <Icon name="google" size={20} color="#DB4437" style={styles.socialIcon} />
+                            {isGoogleLoading ? (
+                                <ActivityIndicator size="small" color="#DB4437" />
+                            ) : (
+                                <Text style={[styles.socialButtonText, styles.googleButtonText]}>Google</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        {Platform.OS === 'ios' && (
+                            <TouchableOpacity 
+                                style={[styles.socialButton, styles.appleButton, isAppleLoading && styles.buttonDisabled]} 
+                                onPress={handleDummyAppleSignUp} 
+                                disabled={isAppleLoading}
+                            >
+                                <Icon name="apple" size={22} color="#FFFFFF" style={styles.socialIcon} />
+                                {isAppleLoading ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <Text style={[styles.socialButtonText, styles.appleButtonText]}>Apple</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Login Link */}
+                    <View style={styles.loginLinkContainer}>
+                        <Text style={styles.loginLinkText}>Already have an account? </Text>
+                        <TouchableOpacity onPress={onNavigateToLogin}>
+                            <Text style={styles.loginLinkTextBold}>Sign In</Text>
+                        </TouchableOpacity>
+                    </View>
                 </ScrollView>
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };
 
-const styles = StyleSheet.create({ safeArea: { flex: 1, backgroundColor: '#F4F6FC' },
-    container: { flex:1 },
+const styles = StyleSheet.create({
+    safeArea: { 
+        flex: 1, 
+        backgroundColor: '#FFFFFF' 
+    },
+    container: { 
+        flex: 1 
+    },
     scrollContentContainer: {
         flexGrow: 1,
-        justifyContent: 'center',
-        paddingHorizontal: 30,
-        paddingVertical: 20
+        paddingHorizontal: 24,
+        paddingVertical: 16
     },
-    logoContainer: { 
-        alignItems: 'center', 
-        marginBottom: 20,
-        marginTop: Platform.OS === 'ios' ? 5 : 15 },
-    logoPlaceholderSmall: { 
-        width: 60, 
-        height: 60, 
-        borderRadius: 10, 
-        backgroundColor: '#E0E7FF', 
-        alignItems: 'center', 
-        justifyContent: 'center'
+    logoContainer: {
+        alignItems: 'center',
+        marginBottom: 10,
+        marginTop: Platform.OS === 'ios' ? 10 : 20
     },
-    logoText: {
-        color: '#6A0DAD', 
-        fontSize: 14, 
-        fontWeight: 'bold'
+    logoWrapper: {
+        alignItems: 'center',
+        marginBottom: 10
+    },
+    appName: {
+        color: '#6A0DAD',
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginTop: 8
+    },
+    headerContainer: {
+        marginBottom: 30
     },
     title: {
-        fontSize:26, 
-        fontWeight:'bold', 
-        color:'#1A202C', 
-        textAlign:'center', 
-        marginBottom:9
-    },
-    subtitle: {
-        fontSize:15, 
-        color:'#4A5568', 
-        textAlign:'center', 
-        marginBottom: 25
-    },
-    inputLabel: {
-        fontSize:14, 
-        color:'#4A5568', 
-        alignSelf:'flex-start', 
-        fontWeight:'500', 
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#1A202C',
+        textAlign: 'center',
         marginBottom: 8
     },
+    subtitle: {
+        fontSize: 16,
+        color: '#718096',
+        textAlign: 'center'
+    },
+    formContainer: {
+        marginBottom: 20
+    },
+    inputGroup: {
+        marginBottom: 16
+    },
+    inputLabel: {
+        fontSize: 14,
+        color: '#4A5568',
+        fontWeight: '600',
+        marginBottom: 8,
+        marginLeft: 4
+    },
     inputWrapper: {
-        flexDirection:'row', 
-        alignItems:'center', 
-        backgroundColor:'#FFFFFF', 
-        borderRadius:10, 
-        borderWidth:1, 
-        borderColor:'#CBD5E0', 
-        width:'100%', 
-        marginBottom:15, 
-        height:52, 
-        shadowColor:"#000", 
-        shadowOffset:{width:0,height:1,}, 
-        shadowOpacity:0.08, 
-        shadowRadius:1.00, 
-        elevation:1
-     },
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        width: '100%',
+        height: 56,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.05,
+        shadowRadius: 3.84,
+        elevation: 2
+    },
+    inputIcon: {
+        paddingHorizontal: 16
+    },
     input: {
-         flex:1, 
-         paddingHorizontal:15, 
-         fontSize:16, 
-         color:'#1A202C' },
+        flex: 1,
+        paddingRight: 15,
+        fontSize: 16,
+        color: '#1A202C'
+    },
     eyeIconContainer: {
-         paddingHorizontal:15,
-         justifyContent: 'center'
-     },
+        paddingHorizontal: 16,
+        justifyContent: 'center'
+    },
     registerButton: {
-         backgroundColor:'#6A0DAD', 
-         width:'100%', 
-         paddingVertical:15, 
-         borderRadius:10, 
-        alignItems:'center', 
-        justifyContent:'center', 
-        minHeight:52, 
-        marginBottom:20, 
-        shadowColor:"#6A0DAD", 
-        shadowOffset:{width:0,height:4,}, 
-        shadowOpacity:0.30, 
-        shadowRadius:4.65, 
-        elevation:8
-     },
-    registerButtonText: { 
-        color:'#FFFFFF', 
-        fontSize:16,
-        fontWeight:'600'
-     },
-    orContinueText: { 
-        fontSize:13, 
-        color:'#A0AEC0', 
-        textAlign:'center', 
-        marginBottom:20, 
-        fontWeight:'500'
-     },
-    socialButton: { 
-        flexDirection:'row', 
-        backgroundColor:'#FFFFFF', 
-        width:'100%', 
-        paddingVertical:14, 
-        borderRadius:10, 
-        alignItems:'center', 
-        justifyContent:'center', 
-        marginBottom: 12, 
-        borderWidth:1, 
-        borderColor:'#E2E8F0', 
-        minHeight:52, 
-        shadowColor:"#000", 
-        shadowOffset:{width:0,height:1,}, 
-        shadowOpacity:0.08, 
-        shadowRadius:1.00, 
-        elevation:1
-     },
-    googleButton:{},
+        backgroundColor: '#6A0DAD',
+        width: '100%',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 56,
+        marginTop: 8,
+        shadowColor: "#6A0DAD",
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 4.65,
+        elevation: 8
+    },
+    buttonDisabled: {
+        opacity: 0.7
+    },
+    registerButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600'
+    },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 24
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E2E8F0'
+    },
+    dividerText: {
+        fontSize: 14,
+        color: '#718096',
+        paddingHorizontal: 10,
+        fontWeight: '500'
+    },
+    socialContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 24,
+        gap: 12
+    },
+    socialButton: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 50,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        flex: 1,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 1.00,
+        elevation: 1
+    },
+    googleButton: {},
     appleButton: {
-         backgroundColor:'#000000',
-         borderColor:'#000000'
-     },
+        backgroundColor: '#000000',
+        borderColor: '#000000'
+    },
     socialIcon: {
-         marginRight:10
-     },
+        marginRight: 8
+    },
     socialButtonText: {
-         fontSize:15,
-         fontWeight:'500',
-         color:'#2D3748'
-     },
+        fontSize: 15,
+        fontWeight: '500'
+    },
+    googleButtonText: {
+        color: '#2D3748'
+    },
+    appleButtonText: {
+        color: '#FFFFFF'
+    },
     loginLinkContainer: {
-         marginTop:20,
-         alignItems:'center'
-     },
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 20
+    },
     loginLinkText: {
-         fontSize:14,
-         color:'#4A5568'
-     },
+        fontSize: 15,
+        color: '#718096'
+    },
     loginLinkTextBold: {
-         fontWeight: 'bold' 
-        } });
+        fontWeight: 'bold',
+        color: '#6A0DAD'
+    }
+});
 
 export default RegisterScreen;
