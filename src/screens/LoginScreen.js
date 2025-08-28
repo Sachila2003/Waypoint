@@ -81,7 +81,6 @@ const LoginScreen = ({ onLoginSuccess = () => { }, onNavigateToRegister = () => 
           keyboardShouldPersistTaps="handled" 
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo Section */}
           <View style={styles.logoContainer}>
             <View style={styles.logoWrapper}>
               <Icon name="map-marker-radius" size={40} color="#6A0DAD" />
@@ -89,13 +88,11 @@ const LoginScreen = ({ onLoginSuccess = () => { }, onNavigateToRegister = () => 
             </View>
           </View>
 
-          {/* Header Section */}
           <View style={styles.headerContainer}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue your journey</Text>
           </View>
 
-          {/* Form Section */}
           <View style={styles.formContainer}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email</Text>
@@ -160,14 +157,12 @@ const LoginScreen = ({ onLoginSuccess = () => { }, onNavigateToRegister = () => 
             </TouchableOpacity>
           </View>
 
-          {/* Divider */}
           <View style={styles.dividerContainer}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social Login Section */}
           <View style={styles.socialContainer}>
             <TouchableOpacity
               style={[styles.socialButton, styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
@@ -198,7 +193,6 @@ const LoginScreen = ({ onLoginSuccess = () => { }, onNavigateToRegister = () => 
             )}
           </View>
 
-          {/* Sign Up Link */}
           <View style={styles.signUpContainer}>
             <Text style={styles.signUpText}>Don't have an account? </Text>
             <TouchableOpacity onPress={onNavigateToRegister}>

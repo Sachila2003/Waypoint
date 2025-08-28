@@ -18,7 +18,7 @@ const WelcomeScreen = ({ navigation }) => {
       />
 
       <View style={styles.overlayContent}>
-        <Text style={styles.appName}>GeoLocate Pro</Text>
+        <Text style={styles.appName}>Waypoint</Text>
         <Text style={styles.tagline}>Your ATM, Bank & Fueling Station Finder</Text>
 
         <TouchableOpacity style={styles.getStartedButton} onPress={() => navigation.navigate('Login')}>
