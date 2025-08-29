@@ -182,62 +182,63 @@ const executeSearch = (searchTerm) => {
   console.log("Executing search for: ", searchTerm);
 }
 
-  const handleSearch = async () => {
-    const locationQuery = search.trim();
-    if (!searchQuery || searchQuery.trim() === '') {
-      Alert.alert("Empty Search", "Please enter a location to search.");
-      return;
-    }
-    if (!selectedCategory) {
-      Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
-      return;
-    }
+const handleSearch = async () => {
+  const locationQuery = search.trim();
+  if (!locationQuery || locationQuery === '') {
+    Alert.alert("Empty Search", "Please enter a location to search.");
+    return;
+  }
+  if (!selectedCategory) {
+    Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
+    return;
+  }
 
-    setIsLoading(true);
-    const fullQuery = `${selectedCategory} in ${locationQuery}`;
-    setLastSearchedQuery(fullQuery);
+  setIsLoading(true);
+  const fullQuery = `${selectedCategory} in ${locationQuery}`;
+  setLastSearchedQuery(fullQuery);
+  setSearchQuery(locationQuery); // Add this line to sync the searchQuery state
 
-    try {
-      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationQuery)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
-      const geocodeResponse = await axios.get(geocodeUrl);
+  try {
+    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationQuery)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
+    const geocodeResponse = await axios.get(geocodeUrl);
 
-      if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
-        const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
-        const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+    if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
+      const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
+      const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
 
-        setCurrentRegion(region);
-        setMapVisible(true);
-        
-        // Save search history
-        const user = auth().currentUser;
-        if(user){
-          firestore()
-          .collection('userHistory')
-          .doc(user.uid)
-          .collection('searches')
-          .add({
-            query: fullQuery,
-            region: region,
-            timestamp: firestore.FieldValue.serverTimestamp(),
-          })
-          .then(() => {
-            console.log('Search history saved!')
-          })
-          .catch(error => {
-            console.log('Error saving search history:', error);
-          });
-        }
-        
-        fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
-      } else {
-        Alert.alert("Not Found", `Could not find "${locationQuery}".`);
-        setIsLoading(false);
+      setCurrentRegion(region);
+      setMapVisible(true);
+      
+      // Save search history
+      const user = auth().currentUser;
+      if(user){
+        firestore()
+        .collection('userHistory')
+        .doc(user.uid)
+        .collection('searches')
+        .add({
+          query: fullQuery,
+          region: region,
+          timestamp: firestore.FieldValue.serverTimestamp(),
+        })
+        .then(() => {
+          console.log('Search history saved!')
+        })
+        .catch(error => {
+          console.log('Error saving search history:', error);
+        });
       }
-    } catch (error) {
-      console.error("Search Error:", error);
+      
+      fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
+    } else {
+      Alert.alert("Not Found", `Could not find "${locationQuery}".`);
       setIsLoading(false);
     }
-  };
+  } catch (error) {
+    console.error("Search Error:", error);
+    setIsLoading(false);
+  }
+};
   const handleSearchFromHistory = (queryFromHistory) => {
     setSearchQuery(queryFromHistory);
     console.log("Search from history for: ", queryFromHistory);
