@@ -463,7 +463,7 @@ const handleSearch = async () => {
           <SearchBar
             ref={searchRef}
             placeholder="Search for a city in Sri Lanka..."
-            onChangeText={setSearch}
+            onChangeText={(text) => setSearch(text)}
             value={search}
             onSubmitEditing={handleSearch}
             containerStyle={styles.searchBarContainer}
