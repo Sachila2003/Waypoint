@@ -234,10 +234,6 @@ const HomeScreen = ({ navigation }) => {
     });
   };
 
-  const executeSearch = (searchTerm) => {
-    console.log("Executing search for: ", searchTerm);
-  }
-
   const handleSearch = async () => {
     const locationQuery = search.trim();
     if (!locationQuery || locationQuery === '') {
