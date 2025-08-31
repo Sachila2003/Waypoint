@@ -30,7 +30,7 @@ const HomeScreen = ({ navigation }) => {
   const [activeFilters, setActiveFilters] = useState({ atm: true, bank: true, fuel: true });
   const [filteredPlaces, setFilteredPlaces] = useState([]);
   const [locationPermission, setLocationPermission] = useState(false);
-  const [userPreferences, setUserPreferences] = useState({});
+  const [userPreference, setUserPreference] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ const HomeScreen = ({ navigation }) => {
               buttonPositive: "OK"
             }
           );
-          
+
           if (granted === PermissionsAndroid.RESULTS.GRANTED) {
             setLocationPermission(true);
             findNearby(false);
@@ -78,8 +78,8 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     if (route.params?.searchQuery) {
       const newQueryFromHistory = route.params.searchQuery;
-      handleSearchFromHistory(newQueryFromHistory); 
-      navigation.setParams({ searchQuery: undefined }); 
+      handleSearchFromHistory(newQueryFromHistory);
+      navigation.setParams({ searchQuery: undefined });
     }
   }, [route.params?.searchQuery]);
   //ai suggestions
@@ -91,12 +91,12 @@ const HomeScreen = ({ navigation }) => {
       }
       try {
         const historySnapshot = await firestore()
-        .collection('users')
-        .doc(user.uid)
-        .collection('searches')
-        .orderBy('timestamp', 'desc')
-        .limit(30)
-        .get();
+          .collection('users')
+          .doc(user.uid)
+          .collection('searches')
+          .orderBy('timestamp', 'desc')
+          .limit(30)
+          .get();
 
         if (historySnapshot.empty) {
           console.log("AI Suggestions: User has no search history yet.");
@@ -125,11 +125,11 @@ const HomeScreen = ({ navigation }) => {
         if (topCategory) {
           console.log("AI Suggestions: User's top preference found ->", topCategory);
           setUserPreferences(topCategory);
-          
+
         } else {
           console.log("AI Suggestions: No user preference found.");
         }
-        
+
       } catch (error) {
         console.error("AI Suggestions Error:", error);
       }
@@ -147,7 +147,7 @@ const HomeScreen = ({ navigation }) => {
       if (activeFilters.fuel && place.type === 'gas_station') return true;
       return false;
     });
-    
+
     setFilteredPlaces(newFilteredPlaces);
   };
 
@@ -172,7 +172,7 @@ const HomeScreen = ({ navigation }) => {
         const placesWithPhotos = await Promise.all(
           response.data.results.map(async (place) => {
             let photoUrl = null;
-            
+
             if (place.photos && place.photos.length > 0) {
               const photoReference = place.photos[0].photo_reference;
               photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoReference}&key=${GOOGLE_API_KEY}`;
@@ -183,8 +183,8 @@ const HomeScreen = ({ navigation }) => {
               coordinate: { latitude: place.geometry.location.lat, longitude: place.geometry.location.lng },
               title: place.name,
               description: place.vicinity,
-              type: place.types.includes('atm') ? 'atm' : 
-                    place.types.includes('bank') ? 'bank' : 'gas_station',
+              type: place.types.includes('atm') ? 'atm' :
+                place.types.includes('bank') ? 'bank' : 'gas_station',
               rating: place.rating,
               openNow: place.opening_hours?.open_now,
               photo: photoUrl,
@@ -234,72 +234,113 @@ const HomeScreen = ({ navigation }) => {
     });
   };
 
-const executeSearch = (searchTerm) => {
-  console.log("Executing search for: ", searchTerm);
-}
-
-const handleSearch = async () => {
-  const locationQuery = search.trim();
-  if (!locationQuery || locationQuery === '') {
-    Alert.alert("Empty Search", "Please enter a location to search.");
-    return;
-  }
-  if (!selectedCategory) {
-    Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
-    return;
+  const executeSearch = (searchTerm) => {
+    console.log("Executing search for: ", searchTerm);
   }
 
-  setIsLoading(true);
-  const fullQuery = `${selectedCategory} in ${locationQuery}`;
-  setLastSearchedQuery(fullQuery);
-  setSearchQuery(locationQuery); // Add this line to sync the searchQuery state
+  const handleSearch = async () => {
+    const locationQuery = search.trim();
+    if (!locationQuery || locationQuery === '') {
+      Alert.alert("Empty Search", "Please enter a location to search.");
+      return;
+    }
+    if (!selectedCategory) {
+      Alert.alert("Select a Category", "Please select a category (ATM, Bank, or Fuel) before searching.");
+      return;
+    }
 
-  try {
-    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationQuery)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
-    const geocodeResponse = await axios.get(geocodeUrl);
+    setIsLoading(true);
+    const fullQuery = `${selectedCategory} in ${locationQuery}`;
+    setLastSearchedQuery(fullQuery);
+    setSearchQuery(locationQuery);
 
-    if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
-      const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
-      const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+    try {
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationQuery)}+Sri+Lanka&key=${GOOGLE_API_KEY}`;
+      const geocodeResponse = await axios.get(geocodeUrl);
 
-      setCurrentRegion(region);
-      setMapVisible(true);
-      
-      // Save search history
-      const user = auth().currentUser;
-      if(user){
-        firestore()
-        .collection('userHistory')
-        .doc(user.uid)
-        .collection('searches')
-        .add({
-          query: fullQuery,
-          region: region,
-          timestamp: firestore.FieldValue.serverTimestamp(),
-        })
-        .then(() => {
-          console.log('Search history saved!')
-        })
-        .catch(error => {
-          console.log('Error saving search history:', error);
-        });
+      if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results.length > 0) {
+        const { lat, lng } = geocodeResponse.data.results[0].geometry.location;
+        const region = { latitude: lat, longitude: lng, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+
+        setCurrentRegion(region);
+        setMapVisible(true);
+
+        // Save search history
+        const user = auth().currentUser;
+        if (user) {
+          firestore()
+            .collection('userHistory')
+            .doc(user.uid)
+            .collection('searches')
+            .add({
+              query: fullQuery,
+              region: region,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            })
+            .then(() => {
+              console.log('Search history saved!')
+            })
+            .catch(error => {
+              console.log('Error saving search history:', error);
+            });
+        }
+
+        fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
+      } else {
+        Alert.alert("Not Found", `Could not find "${locationQuery}".`);
+        setIsLoading(false);
       }
-      
-      fetchPlaces(region, `${selectedCategory} in ${search.trim()}`);
-    } else {
-      Alert.alert("Not Found", `Could not find "${locationQuery}".`);
+    } catch (error) {
+      console.error("Search Error:", error);
       setIsLoading(false);
     }
-  } catch (error) {
-    console.error("Search Error:", error);
-    setIsLoading(false);
-  }
-};
+  };
   const handleSearchFromHistory = (queryFromHistory) => {
     setSearchQuery(queryFromHistory);
     console.log("Search from history for: ", queryFromHistory);
     handleSearch();
   }
+  const handleSearchTextChange = (text) => {
+    setSearch(text);
+
+    if (text.length > 2) {
+      const newSuggestions = [];
+
+      if (userPreference) {
+        newSuggestions.push({
+          text: `${userPreference} in ${text}`,
+          isAIPick: true
+        });
+      }
+
+      const generalCategories = ['ATM', 'Bank', 'Fuel Station'];
+      generalCategories.forEach(category => {
+        if (category.toLowerCase() !== userPreference?.toLowerCase()) {
+          newSuggestions.push({
+            text: `${category} in ${text}`,
+            isAIPick: false
+          });
+        }
+      });
+
+      setSuggestions(newSuggestions);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const onSuggestionPress = (suggestion) => {
+    const parts = suggestion.text.split(' in ');
+    const category = parts[0];
+    const location = parts[1];
+
+    setSelectedCategory(category); 
+    setSearch(location);
+    setSuggestions([]);
+    setTimeout(() => {
+      handleSearch();
+    }, 100);
+  };
 
   const findNearby = async (showMap = true) => {
     try {
@@ -311,7 +352,7 @@ const handleSearch = async () => {
           setLocationPermission(true);
         }
       }
-      
+
       setIsLoading(true);
       const region = await getCurrentLocation();
       await fetchPlaces(region);
@@ -336,10 +377,10 @@ const handleSearch = async () => {
   const onCardPress = (item) => {
     setSelectedPlace(item);
     if (mapRef.current) {
-      mapRef.current.animateToRegion({ 
-        ...item.coordinate, 
-        latitudeDelta: 0.01, 
-        longitudeDelta: 0.01 
+      mapRef.current.animateToRegion({
+        ...item.coordinate,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01
       }, 800);
     }
   };
@@ -396,7 +437,7 @@ const handleSearch = async () => {
   );
 
   const renderMapCard = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
         styles.mapCard,
         selectedPlace?.id === item.id && styles.selectedMapCard
@@ -415,13 +456,13 @@ const handleSearch = async () => {
         </View>
         <Text style={styles.mapCardDescription} numberOfLines={2}>{item.description}</Text>
         {item.rating && (
-            <View style={styles.mapCardRatingContainer}>
-              <Icon name="star" size={14} color="#FFD700" />
-              <Text style={styles.mapCardRatingText}>{item.rating}</Text>
-              {item.totalRatings && (
-                <Text style={styles.mapCardRatingCount}>({item.totalRatings})</Text>
-              )}
-            </View>
+          <View style={styles.mapCardRatingContainer}>
+            <Icon name="star" size={14} color="#FFD700" />
+            <Text style={styles.mapCardRatingText}>{item.rating}</Text>
+            {item.totalRatings && (
+              <Text style={styles.mapCardRatingCount}>({item.totalRatings})</Text>
+            )}
+          </View>
         )}
         <View style={styles.mapCardFooter}>
           {item.openNow !== undefined && (
@@ -441,12 +482,12 @@ const handleSearch = async () => {
     </TouchableOpacity>
   );
 
-  const getMarkerIcon = (type) => { 
-    return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station'; 
+  const getMarkerIcon = (type) => {
+    return type === 'atm' ? 'local-atm' : type === 'bank' ? 'account-balance' : 'local-gas-station';
   };
-  
-  const getMarkerColor = (type) => { 
-    return type === 'atm' ? '#007BFF' : type === 'bank' ? '#28a745' : '#dc3545'; 
+
+  const getMarkerColor = (type) => {
+    return type === 'atm' ? '#007BFF' : type === 'bank' ? '#28a745' : '#dc3545';
   };
 
   const toggleFilter = (filterType) => {
@@ -463,22 +504,39 @@ const handleSearch = async () => {
           <SearchBar
             ref={searchRef}
             placeholder="Search for a city in Sri Lanka..."
-            onChangeText={(text) => setSearch(text)}
+            onChangeText={(text) => handleSearchTextChange(text)}
             value={search}
             onSubmitEditing={handleSearch}
+            showLoading={isLoading}
             containerStyle={styles.searchBarContainer}
             inputContainerStyle={styles.searchInputContainer}
             round
             searchIcon={{ color: '#6A0DAD' }}
           />
+          {suggestions.length > 0 && (
+            <FlatList
+              data={suggestions}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.suggestionItem}
+                  onPress={() => onSuggestionPress(item)}
+                >
+                  {item.isAIPick && <Icon name="star" type="material" color="#FFD700" size={16} containerStyle={{ marginRight: 8 }} />}
+                  <Text style={styles.suggestionText}>{item.text}</Text>
+                </TouchableOpacity>
+              )}
+              style={styles.suggestionsContainer}
+            />
+          )}
           <Text style={styles.orText}>- OR -</Text>
           <Button
             title={search.trim() !== "" ? `Search for "${search}"` : "Find Places Near Me"}
             onPress={search.trim() !== "" ? handleSearch : findNearby}
-            icon={{ 
-              name: search.trim() !== "" ? 'search' : 'my-location', 
-              color: 'white', 
-              size: 20 
+            icon={{
+              name: search.trim() !== "" ? 'search' : 'my-location',
+              color: 'white',
+              size: 20
             }}
             buttonStyle={styles.findButton}
             titleStyle={styles.findButtonText}
@@ -532,20 +590,20 @@ const handleSearch = async () => {
             <View style={styles.filterBar}>
               <Text style={styles.resultsTitle}>Nearby Places</Text>
               <View style={styles.filterButtons}>
-                <TouchableOpacity 
-                  style={[styles.filterBtn, activeFilters.atm && styles.filterBtnActive]} 
+                <TouchableOpacity
+                  style={[styles.filterBtn, activeFilters.atm && styles.filterBtnActive]}
                   onPress={() => toggleFilter('atm')}
                 >
                   <Text style={[styles.filterBtnText, activeFilters.atm && styles.filterBtnTextActive]}>ATMs</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.filterBtn, activeFilters.bank && styles.filterBtnActive]} 
+                <TouchableOpacity
+                  style={[styles.filterBtn, activeFilters.bank && styles.filterBtnActive]}
                   onPress={() => toggleFilter('bank')}
                 >
                   <Text style={[styles.filterBtnText, activeFilters.bank && styles.filterBtnTextActive]}>Banks</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.filterBtn, activeFilters.fuel && styles.filterBtnActive]} 
+                <TouchableOpacity
+                  style={[styles.filterBtn, activeFilters.fuel && styles.filterBtnActive]}
                   onPress={() => toggleFilter('fuel')}
                 >
                   <Text style={[styles.filterBtnText, activeFilters.fuel && styles.filterBtnTextActive]}>Fuel</Text>
@@ -584,8 +642,8 @@ const handleSearch = async () => {
             onPress={() => onMarkerPress(marker)}
           >
             <View style={[
-              styles.markerContainer, 
-              { backgroundColor: getMarkerColor(marker.type) }, 
+              styles.markerContainer,
+              { backgroundColor: getMarkerColor(marker.type) },
               selectedPlace?.id === marker.id && styles.selectedMarker
             ]}>
               <Icon name={getMarkerIcon(marker.type)} size={18} color="white" />
@@ -599,14 +657,14 @@ const handleSearch = async () => {
       </TouchableOpacity>
 
       <View style={styles.searchOnMap}>
-        <SearchBar 
-          placeholder={lastSearchedQuery || "Search again..."} 
-          onChangeText={setSearch} 
-          value={search} 
-          onSubmitEditing={handleSearch} 
-          containerStyle={styles.mapSearchContainer} 
-          inputContainerStyle={styles.mapSearchInput} 
-          round 
+        <SearchBar
+          placeholder={lastSearchedQuery || "Search again..."}
+          onChangeText={setSearch}
+          value={search}
+          onSubmitEditing={handleSearch}
+          containerStyle={styles.mapSearchContainer}
+          inputContainerStyle={styles.mapSearchInput}
+          round
         />
       </View>
 
@@ -694,6 +752,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     borderRadius: 25,
     height: 50,
+  },
+
+  suggestionsContainer: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    marginTop: -10, // To connect with the search bar
+    marginHorizontal: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    maxHeight: 200, // To prevent it from taking up the whole screen
+  },
+  suggestionItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  suggestionText: {
+    fontSize: 16,
+    color: '#333',
   },
   orText: {
     textAlign: 'center',
