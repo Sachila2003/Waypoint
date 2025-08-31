@@ -16,7 +16,6 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import auth from '@react-native-firebase/auth';
 
-// vvv THIS IS THE IMPORTANT FIX FOR THE ERROR vvv
 const LoginScreen = ({ onLoginSuccess = () => { }, onNavigateToRegister = () => { } }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -30,6 +30,8 @@ const HomeScreen = ({ navigation }) => {
   const [activeFilters, setActiveFilters] = useState({ atm: true, bank: true, fuel: true });
   const [filteredPlaces, setFilteredPlaces] = useState([]);
   const [locationPermission, setLocationPermission] = useState(false);
+  const [userPreferences, setUserPreferences] = useState({});
+  const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -80,6 +82,60 @@ const HomeScreen = ({ navigation }) => {
       navigation.setParams({ searchQuery: undefined }); 
     }
   }, [route.params?.searchQuery]);
+  //ai suggestions
+  useEffect(() => {
+    const findUserPreference = async () => {
+      const user = auth().currentUser;
+      if (!user) {
+        return;
+      }
+      try {
+        const historySnapshot = await firestore()
+        .collection('users')
+        .doc(user.uid)
+        .collection('searches')
+        .orderBy('timestamp', 'desc')
+        .limit(30)
+        .get();
+
+        if (historySnapshot.empty) {
+          console.log("AI Suggestions: User has no search history yet.");
+          return;
+        }
+        const categoriesCount = {};
+        historySnapshot.forEach(doc => {
+          const query = doc.data().query || '';
+
+          if (query.includes(' in ')) {
+            const category = query.split(' in ')[0].trim();
+            if (category) {
+              categoriesCount[category] = (categoriesCount[category] || 0) + 1;
+            }
+          }
+        });
+        let topCategory = null;
+        let maxCount = 0;
+
+        for (const category in categoriesCount) {
+          if (categoriesCount[category] > maxCount && category.toLowerCase() !== 'place near me') {
+            maxCount = categoriesCount[category];
+            topCategory = category;
+          }
+        }
+        if (topCategory) {
+          console.log("AI Suggestions: User's top preference found ->", topCategory);
+          setUserPreferences(topCategory);
+          
+        } else {
+          console.log("AI Suggestions: No user preference found.");
+        }
+        
+      } catch (error) {
+        console.error("AI Suggestions Error:", error);
+      }
+    }
+    findUserPreference();
+  }, []);
 
   const filterPlaces = () => {
     const noFiltersActive = !activeFilters.atm && !activeFilters.bank && !activeFilters.fuel;

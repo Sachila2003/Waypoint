@@ -11,7 +11,6 @@ const AuthNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       
-      {/* Welcome Screen ekt onGetStarted prop ek ywn wdiha */}
       <Stack.Screen name="Welcome">
         {(props) => (
           <WelcomeScreen 

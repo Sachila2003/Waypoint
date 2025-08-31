@@ -25,8 +25,6 @@ const CustomHeaderTitle = () => {
         </View>
     );
 };
-
-// BurgerMenu component that receives navigation as a prop
 const BurgerMenu = ({ navigation, isVisible, onClose }) => {
     if (!isVisible) return null;
 
@@ -84,7 +82,7 @@ const BurgerMenu = ({ navigation, isVisible, onClose }) => {
 // Main App Navigator
 const MainAppNavigator = () => {
     const [menuVisible, setMenuVisible] = useState(false);
-    const navigation = useNavigation(); // Use the hook inside the component
+    const navigation = useNavigation();
 
     return (
         <>
@@ -151,8 +149,6 @@ const MainAppNavigator = () => {
                     }}
                 />
             </Stack.Navigator>
-            
-            {/* Burger Menu with navigation prop */}
             <BurgerMenu 
                 navigation={navigation}
                 isVisible={menuVisible} 
