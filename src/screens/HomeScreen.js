@@ -70,73 +70,85 @@ const HomeScreen = ({ navigation }) => {
   }, [activeFilters, places]);
 
   useEffect(() => {
-    if (selectedCategory && searchRef.current) {
-      searchRef.current.focus();
-    }
-  }, [selectedCategory]);
+    const authSubscriber = auth().onAuthStateChanged((user) => {
+      if (user) {
+        console.log("User is authenticated. Running initial setup.");
+        
+        initializeLocationPermission(); 
+        
+        findUserPreference(user); 
 
-  useEffect(() => {
-    if (route.params?.searchQuery) {
-      const newQueryFromHistory = route.params.searchQuery;
-      handleSearchFromHistory(newQueryFromHistory);
-      navigation.setParams({ searchQuery: undefined });
-    }
-  }, [route.params?.searchQuery]);
+      } else {
+        console.log("User is not authenticated.");
+      }
+    });
+    
+    const initializeLocationPermission = async () => {
+    };
+
+    return authSubscriber; 
+
+  }, []); 
+
+ 
   //ai suggestions
-  useEffect(() => {
-    const findUserPreference = async () => {
-      const user = auth().currentUser;
-      if (!user) {
+  const findUserPreference = async (user) => {
+    if (!user) {
+      console.log("AI DEBUG: User is null, cannot find preference.");
+      return;
+    }
+    
+    console.log("AI DEBUG: Starting to find user preference...");
+  
+    try {
+      const historySnapshot = await firestore()
+        .collection('userHistory')
+        .doc(user.uid)
+        .collection('searches')
+        .orderBy('timestamp', 'desc')
+        .limit(30)
+        .get();
+      
+      if (historySnapshot.empty) {
+        console.log("AI DEBUG: History is empty.");
         return;
       }
-      try {
-        const historySnapshot = await firestore()
-          .collection('users')
-          .doc(user.uid)
-          .collection('searches')
-          .orderBy('timestamp', 'desc')
-          .limit(30)
-          .get();
-
-        if (historySnapshot.empty) {
-          console.log("AI Suggestions: User has no search history yet.");
-          return;
-        }
-        const categoriesCount = {};
-        historySnapshot.forEach(doc => {
-          const query = doc.data().query || '';
-
-          if (query.includes(' in ')) {
-            const category = query.split(' in ')[0].trim();
-            if (category) {
-              categoriesCount[category] = (categoriesCount[category] || 0) + 1;
-            }
-          }
-        });
-        let topCategory = null;
-        let maxCount = 0;
-
-        for (const category in categoriesCount) {
-          if (categoriesCount[category] > maxCount && category.toLowerCase() !== 'place near me') {
-            maxCount = categoriesCount[category];
-            topCategory = category;
+  
+      console.log(`AI DEBUG: Found ${historySnapshot.size} history documents.`);
+  
+      const categoriesCount = {};
+      historySnapshot.forEach(doc => {
+        const query = doc.data().query || '';
+        if (query.includes(' in ')) {
+          const category = query.split(' in ')[0].trim();
+          if (category) {
+            categoriesCount[category] = (categoriesCount[category] || 0) + 1;
           }
         }
-        if (topCategory) {
-          console.log("AI Suggestions: User's top preference found ->", topCategory);
-          setUserPreferences(topCategory);
-
-        } else {
-          console.log("AI Suggestions: No user preference found.");
+      });
+  
+      console.log("AI DEBUG: Categories counted:", categoriesCount);
+  
+      let topCategory = null;
+      let maxCount = 0;
+      for (const category in categoriesCount) {
+        if (categoriesCount[category] > maxCount && category.toLowerCase() !== 'places near me') {
+          maxCount = categoriesCount[category];
+          topCategory = category;
         }
-
-      } catch (error) {
-        console.error("AI Suggestions Error:", error);
       }
+  
+      if (topCategory) {
+        console.log("AI DEBUG: Top preference found ->", topCategory);
+        setUserPreference(topCategory);
+      } else {
+        console.log("AI DEBUG: No specific top category was found after counting.");
+      }
+  
+    } catch (error) {
+      console.error("AI DEBUG: Error during findUserPreference:", error); 
     }
-    findUserPreference();
-  }, []);
-
+  };
   const filterPlaces = () => {
     const noFiltersActive = !activeFilters.atm && !activeFilters.bank && !activeFilters.fuel;
 
@@ -247,6 +259,7 @@ const HomeScreen = ({ navigation }) => {
 
     setIsLoading(true);
     const fullQuery = `${selectedCategory} in ${locationQuery}`;
+    console.log("Saving this to history:", fullQuery);
     setLastSearchedQuery(fullQuery);
     setSearchQuery(locationQuery);
 
@@ -274,10 +287,10 @@ const HomeScreen = ({ navigation }) => {
               timestamp: firestore.FieldValue.serverTimestamp(),
             })
             .then(() => {
-              console.log('Search history saved!')
+              console.log('SUCCESS: Search history was saved to Firestore!');
             })
             .catch(error => {
-              console.log('Error saving search history:', error);
+              console.error('ERROR: Failed to save search history:', error);
             });
         }
 
