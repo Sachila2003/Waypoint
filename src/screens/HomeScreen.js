@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity, Linking, Dimensions, FlatList, Image } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
-import Geolocation from 'react-native-geolocation-service';
+import polyline from '@mapbox/polyline';
+import Geolocation from 'react-native-geolocation-service'
+import { useLocation } from '../contexts/LocationContext';
 import axios from 'axios';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -13,6 +15,7 @@ const GOOGLE_API_KEY = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
 
 const HomeScreen = ({ navigation }) => {
   const route = useRoute();
+  const { userLocation, setUserLocation, setLocationName } = useLocation(); 
   const [searchQuery, setSearchQuery] = useState('');
   const mapRef = useRef(null);
   const flatListRef = useRef(null);
@@ -20,7 +23,7 @@ const HomeScreen = ({ navigation }) => {
 
   const [mapVisible, setMapVisible] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(null);
-  const [userLocation, setUserLocation] = useState(null);
+  // const [userLocation, setUserLocation] = useState(null);
   const [places, setPlaces] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -30,6 +33,7 @@ const HomeScreen = ({ navigation }) => {
   const [activeFilters, setActiveFilters] = useState({ atm: true, bank: true, fuel: true });
   const [filteredPlaces, setFilteredPlaces] = useState([]);
   const [locationPermission, setLocationPermission] = useState(false);
+  const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [userPreference, setUserPreference] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
 
@@ -73,33 +77,33 @@ const HomeScreen = ({ navigation }) => {
     const authSubscriber = auth().onAuthStateChanged((user) => {
       if (user) {
         console.log("User is authenticated. Running initial setup.");
-        
-        initializeLocationPermission(); 
-        
-        findUserPreference(user); 
+
+        initializeLocationPermission();
+
+        findUserPreference(user);
 
       } else {
         console.log("User is not authenticated.");
       }
     });
-    
+
     const initializeLocationPermission = async () => {
     };
 
-    return authSubscriber; 
+    return authSubscriber;
 
-  }, []); 
+  }, []);
 
- 
+
   //ai suggestions
   const findUserPreference = async (user) => {
     if (!user) {
       console.log("AI DEBUG: User is null, cannot find preference.");
       return;
     }
-    
+
     console.log("AI DEBUG: Starting to find user preference...");
-  
+
     try {
       const historySnapshot = await firestore()
         .collection('userHistory')
@@ -108,14 +112,14 @@ const HomeScreen = ({ navigation }) => {
         .orderBy('timestamp', 'desc')
         .limit(30)
         .get();
-      
+
       if (historySnapshot.empty) {
         console.log("AI DEBUG: History is empty.");
         return;
       }
-  
+
       console.log(`AI DEBUG: Found ${historySnapshot.size} history documents.`);
-  
+
       const categoriesCount = {};
       historySnapshot.forEach(doc => {
         const query = doc.data().query || '';
@@ -126,9 +130,9 @@ const HomeScreen = ({ navigation }) => {
           }
         }
       });
-  
+
       console.log("AI DEBUG: Categories counted:", categoriesCount);
-  
+
       let topCategory = null;
       let maxCount = 0;
       for (const category in categoriesCount) {
@@ -137,16 +141,16 @@ const HomeScreen = ({ navigation }) => {
           topCategory = category;
         }
       }
-  
+
       if (topCategory) {
         console.log("AI DEBUG: Top preference found ->", topCategory);
         setUserPreference(topCategory);
       } else {
         console.log("AI DEBUG: No specific top category was found after counting.");
       }
-  
+
     } catch (error) {
-      console.error("AI DEBUG: Error during findUserPreference:", error); 
+      console.error("AI DEBUG: Error during findUserPreference:", error);
     }
   };
   const filterPlaces = () => {
@@ -231,21 +235,53 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const getCurrentLocation = () => {
-    return new Promise((resolve, reject) => {
+
+const getCurrentLocation = () => {
+  return new Promise((resolve, reject) => {
+    
+    const tryLocation = (options, attempt) => {
+      console.log(`Attempt ${attempt}: Trying to get location...`);
+
       Geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
           const region = { latitude, longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+          console.log("SUCCESS! Location found on attempt " + attempt, region);
           setUserLocation({ latitude, longitude });
+
+          try {
+            const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_API_KEY}`;
+            const response = await axios.get(geocodeUrl);
+            if (response.data.status === 'OK' && response.data.results[0]) {
+              const addressComponents = response.data.results[0].address_components;
+              const cityComponent = addressComponents.find(c => c.types.includes('locality') || c.types.includes('administrative_area_level_2'));
+              if (cityComponent) {
+                setLocationName(cityComponent.long_name);
+              }
+            }
+          } catch (geoError) {
+            console.error("Reverse Geocoding failed:", geoError);
+          }
+          
           resolve(region);
         },
-        (error) => reject(error),
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        (error) => {
+          console.error(`Attempt ${attempt} failed:`, error.message);
+          
+          if (attempt === 1) {
+            const lowAccuracyOptions = { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 };
+            tryLocation(lowAccuracyOptions, 2);
+          } else {
+            reject(error);
+          }
+        },
+        options
       );
-    });
-  };
-
+    };
+    const highAccuracyOptions = { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000, forceRequestLocation: true };
+    tryLocation(highAccuracyOptions, 1);
+  });
+};
   const handleSearch = async () => {
     const locationQuery = search.trim();
     if (!locationQuery || locationQuery === '') {
@@ -337,13 +373,67 @@ const HomeScreen = ({ navigation }) => {
       setSuggestions([]);
     }
   };
+  const getDirections = async (endLoc) => {
+    
+    // vvvv THIS IS THE IMPORTANT NEW CHECK vvvv
+    // 1. Check if we have the user's location first.
+    if (!userLocation) {
+      Alert.alert(
+        "Location Needed", 
+        "Your current location is not available yet. Please wait a moment and try again.",
+        [{ text: "OK" }]
+      );
+      console.log("Cannot get directions because userLocation is null.");
+      return; // Stop the function here.
+    }
+    // ^^^^ END OF THE NEW CHECK ^^^^
+
+
+    // If the check passes, the rest of the function runs as before.
+    try {
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${userLocation.latitude},${userLocation.longitude}&destination=${endLoc.latitude},${endLoc.longitude}&key=${GOOGLE_API_KEY}`;
+      
+      const response = await axios.get(url);
+      
+      if (response.data.routes.length > 0) {
+        // ... all the polyline decoding logic (no change here) ...
+        const points = response.data.routes[0].overview_polyline.points;
+        const decodedPoints = polyline.decode(points);
+        const coords = decodedPoints.map(point => ({
+          latitude: point[0],
+          longitude: point[1],
+        }));
+        
+        setRouteCoordinates(coords);
+        
+        if (mapRef.current) {
+          mapRef.current.fitToCoordinates(coords, {
+            edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
+            animated: true,
+          });
+        }
+      } else {
+        // This handles cases where Google can't find a route
+        Alert.alert("No Route Found", "Could not find a route to this destination.");
+      }
+    } catch (error) {
+      // ... our improved error logging (no change here) ...
+      if (error.response) {
+        console.error("Directions API Response Error:", error.response.data);
+        Alert.alert("Directions Error", error.response.data.error_message || "Could not get directions.");
+      } else {
+        console.error("Directions API Setup Error:", error.message);
+        Alert.alert("Error", "An unexpected error occurred.");
+      }
+    }
+  };
 
   const onSuggestionPress = (suggestion) => {
     const parts = suggestion.text.split(' in ');
     const category = parts[0];
     const location = parts[1];
 
-    setSelectedCategory(category); 
+    setSelectedCategory(category);
     setSearch(location);
     setSuggestions([]);
     setTimeout(() => {
@@ -407,39 +497,36 @@ const HomeScreen = ({ navigation }) => {
       style={[styles.card, selectedPlace?.id === item.id && styles.selectedCard]}
       onPress={() => onCardPress(item)}
     >
-      {item.photo && (
-        <Image source={{ uri: item.photo }} style={styles.cardImage} />
-      )}
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <Icon name={getMarkerIcon(item.type)} size={20} color={getMarkerColor(item.type)} />
+      <View style={styles.cardInnerContainer}>
+        {item.photo && (
+          <Image source={{ uri: item.photo }} style={styles.cardImage} />
+        )}
+        <View style={styles.cardContent}>
           <View style={styles.cardTitleContainer}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-            {item.rating && (
-              <View style={styles.ratingContainer}>
-                <Icon name="star" size={14} color="#FFD700" />
-                <Text style={styles.ratingText}>{item.rating}</Text>
-                {item.totalRatings && (
-                  <Text style={styles.ratingCount}>({item.totalRatings})</Text>
-                )}
-              </View>
-            )}
+            <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
           </View>
-        </View>
-        <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
-        <View style={styles.cardFooter}>
-          {item.openNow !== undefined && (
-            <Text style={[styles.statusText, item.openNow ? styles.openText : styles.closedText]}>
-              {item.openNow ? 'Open Now' : 'Closed'}
-            </Text>
+
+          {item.rating && (
+            <View style={styles.ratingContainer}>
+              <Icon name="star" size={14} color="#FFD700" />
+              <Text style={styles.ratingText}>{item.rating} ({item.totalRatings})</Text>
+            </View>
           )}
-          <Button
-            title="Directions"
-            onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
-            buttonStyle={styles.directionsButton}
-            titleStyle={{ fontSize: 12, fontWeight: 'bold' }}
-            icon={{ name: 'directions', color: 'white', size: 14 }}
-          />
+
+          <Text style={styles.cardDescription} numberOfLines={1}>{item.description}</Text>
+          
+          <View style={styles.cardFooter}>
+            {item.openNow !== undefined && (
+              <Text style={[styles.statusText, item.openNow ? styles.openText : styles.closedText]}>
+                {item.openNow ? 'Open Now' : 'Closed'}
+              </Text>
+            )}
+            <TouchableOpacity onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}>
+              <View style={styles.directionsButton}>
+                <Icon name="directions" color="white" size={14} />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -479,13 +566,15 @@ const HomeScreen = ({ navigation }) => {
               {item.openNow ? 'Open Now' : 'Closed'}
             </Text>
           )}
-          <Button
-            title="Directions"
-            onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}
-            buttonStyle={styles.mapCardDirectionsButton}
-            titleStyle={{ fontSize: 12, fontWeight: 'bold' }}
-            icon={{ name: 'directions', color: 'white', size: 14 }}
-          />
+          <TouchableOpacity onPress={() => {
+            console.log("Directions Button on Map Card PRESSED!");
+            getDirections(item.coordinate);
+          }}>
+            <View style={styles.mapCardDirectionsButton}>
+              <Icon name="directions" color="white" size={14} style={{ marginRight: 5 }} />
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Directions</Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
@@ -659,9 +748,16 @@ const HomeScreen = ({ navigation }) => {
             </View>
           </Marker>
         ))}
+        {routeCoordinates.length > 0 && (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeColor="#6A0DAD"
+            strokeWidth={5}
+          />
+        )}
       </MapView>
 
-      <TouchableOpacity style={styles.backButton} onPress={() => { setMapVisible(false); setPlaces([]); setSearch(""); }}>
+      <TouchableOpacity style={styles.backButton} onPress={() => { setMapVisible(false); setPlaces([]); setSearch(""); setRouteCoordinates([]); }}>
         <Icon name="arrow-back" size={24} color="#333" />
       </TouchableOpacity>
 
@@ -686,14 +782,15 @@ const HomeScreen = ({ navigation }) => {
 
       {places.length > 0 && !isLoading && (
         <FlatList
-          ref={flatListRef}
-          data={places}
-          renderItem={renderMapCard}
-          keyExtractor={item => item.id.toString()}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.mapCarousel}
-          contentContainerStyle={styles.mapCarouselContent}
+        ref={flatListRef}
+        data={places}
+        renderItem={renderMapCard}
+        keyExtractor={item => item.id.toString()}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.mapCarousel}
+        contentContainerStyle={styles.mapCarouselContent}
+          keyboardShouldPersistTaps="handled"
         />
       )}
     </View>
@@ -894,96 +991,79 @@ const styles = StyleSheet.create({
   filterBtnTextActive: {
     color: 'white',
   },
-  carousel: {
-    paddingHorizontal: 10,
-  },
-  carouselContent: {
-    paddingHorizontal: 10,
-    height: screenHeight * 0.32,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    width: screenWidth * 0.80,
-    height: screenHeight * 0.32,
-    marginRight: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    overflow: 'hidden',
-  },
-  cardImage: {
-    width: '100%',
-    height: 150,
-    borderTopLeftRadius: 15,
-    borderTopRightRadius: 15,
-  },
-  cardContent: {
-    padding: 15,
-  },
-  selectedCard: {
-    borderColor: '#6A0DAD',
-    borderWidth: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cardTitleContainer: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-    color: '#666',
-  },
-  ratingCount: {
-    fontSize: 12,
-    color: '#999',
-    marginLeft: 4,
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  openText: {
-    color: '#28a745',
-  },
-  closedText: {
-    color: '#dc3545',
-  },
-  directionsButton: {
-    backgroundColor: '#6A0DAD',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 32,
-  },
+ card: {
+  backgroundColor: 'white',
+  borderRadius: 15,
+  width: screenWidth * 0.9,
+  marginRight: 15,
+  elevation: 3,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+},
+cardInnerContainer: {
+  flexDirection: 'row',
+},
+cardImage: {
+  width: 100,
+  height: '100%',
+  borderTopLeftRadius: 15,
+  borderBottomLeftRadius: 15,
+},
+cardContent: {
+  flex: 1,
+  padding: 12,
+  justifyContent: 'space-between',
+},
+selectedCard: {
+  borderColor: '#6A0DAD',
+  borderWidth: 2,
+},
+cardTitleContainer: {
+},
+cardTitle: {
+  fontSize: 15,
+  fontWeight: 'bold',
+  color: '#333',
+},
+ratingContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 4,
+},
+ratingText: {
+  fontSize: 12,
+  fontWeight: '600',
+  marginLeft: 4,
+  color: '#666',
+},
+cardDescription: {
+  fontSize: 13,
+  color: '#888',
+  marginTop: 4,
+},
+cardFooter: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginTop: 8,
+},
+statusText: {
+  fontSize: 13,
+  fontWeight: 'bold',
+},
+openText: {
+  color: '#28a745',
+},
+closedText: {
+  color: '#dc3545',
+},
+directionsButton: {
+  backgroundColor: '#6A0DAD',
+  borderRadius: 18,
+  padding: 8,
+},
   mapCarousel: {
     position: 'absolute',
     bottom: 20,
@@ -1065,6 +1145,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     height: 35,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backButton: {
     position: 'absolute',
