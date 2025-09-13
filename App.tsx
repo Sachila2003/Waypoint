@@ -1,14 +1,12 @@
-// App.tsx
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { View, ActivityIndicator } from 'react-native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-// Import Navigators
 import AuthNavigator from './src/navigation/AuthNavigator';
 import MainAppNavigator from './src/navigation/MainAppNavigator';
 
-// Import our new Context Provider
 import { LocationProvider } from './src/contexts/LocationContext';
 
 const AppContent = () => {
@@ -19,6 +17,11 @@ const AppContent = () => {
     setUser(userResult);
     if (initializing) setInitializing(false);
   }
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: '266909651460-2i8ukrs6kgo8d3qmd482fbbjoee7a9ae.apps.googleusercontent.com',
+    });
+  }, []);
 
   useEffect(() => {
     const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
@@ -38,8 +41,6 @@ const AppContent = () => {
 
 const App = () => {
   return (
-    // vvv THIS IS THE FIX vvv
-    // LocationProvider should wrap the entire app content that needs location data.
     <LocationProvider>
       <AppContent />
     </LocationProvider>
