@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, PermissionsAndroid, Platform, Alert, ActivityIndicator, TouchableOpacity, Linking, Dimensions, FlatList, Image } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import polyline from '@mapbox/polyline';
 import Geolocation from 'react-native-geolocation-service'
 import { useLocation } from '../contexts/LocationContext';
@@ -15,7 +15,7 @@ const GOOGLE_API_KEY = 'AIzaSyDMwiLdNmZp5DtwIQ7LYtktlf6ouAK14gc';
 
 const HomeScreen = ({ navigation }) => {
   const route = useRoute();
-  const { userLocation, setUserLocation, setLocationName } = useLocation(); 
+  const { userLocation, setUserLocation, setLocationName } = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const mapRef = useRef(null);
   const flatListRef = useRef(null);
@@ -36,6 +36,7 @@ const HomeScreen = ({ navigation }) => {
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [userPreference, setUserPreference] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [routeInfo, setRouteInfo] = useState(null);
 
   useEffect(() => {
     const initialize = async () => {
@@ -236,52 +237,52 @@ const HomeScreen = ({ navigation }) => {
   };
 
 
-const getCurrentLocation = () => {
-  return new Promise((resolve, reject) => {
-    
-    const tryLocation = (options, attempt) => {
-      console.log(`Attempt ${attempt}: Trying to get location...`);
+  const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
 
-      Geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          const region = { latitude, longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 };
-          console.log("SUCCESS! Location found on attempt " + attempt, region);
-          setUserLocation({ latitude, longitude });
+      const tryLocation = (options, attempt) => {
+        console.log(`Attempt ${attempt}: Trying to get location...`);
 
-          try {
-            const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_API_KEY}`;
-            const response = await axios.get(geocodeUrl);
-            if (response.data.status === 'OK' && response.data.results[0]) {
-              const addressComponents = response.data.results[0].address_components;
-              const cityComponent = addressComponents.find(c => c.types.includes('locality') || c.types.includes('administrative_area_level_2'));
-              if (cityComponent) {
-                setLocationName(cityComponent.long_name);
+        Geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            const region = { latitude, longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 };
+            console.log("SUCCESS! Location found on attempt " + attempt, region);
+            setUserLocation({ latitude, longitude });
+
+            try {
+              const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_API_KEY}`;
+              const response = await axios.get(geocodeUrl);
+              if (response.data.status === 'OK' && response.data.results[0]) {
+                const addressComponents = response.data.results[0].address_components;
+                const cityComponent = addressComponents.find(c => c.types.includes('locality') || c.types.includes('administrative_area_level_2'));
+                if (cityComponent) {
+                  setLocationName(cityComponent.long_name);
+                }
               }
+            } catch (geoError) {
+              console.error("Reverse Geocoding failed:", geoError);
             }
-          } catch (geoError) {
-            console.error("Reverse Geocoding failed:", geoError);
-          }
-          
-          resolve(region);
-        },
-        (error) => {
-          console.error(`Attempt ${attempt} failed:`, error.message);
-          
-          if (attempt === 1) {
-            const lowAccuracyOptions = { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 };
-            tryLocation(lowAccuracyOptions, 2);
-          } else {
-            reject(error);
-          }
-        },
-        options
-      );
-    };
-    const highAccuracyOptions = { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000, forceRequestLocation: true };
-    tryLocation(highAccuracyOptions, 1);
-  });
-};
+
+            resolve(region);
+          },
+          (error) => {
+            console.error(`Attempt ${attempt} failed:`, error.message);
+
+            if (attempt === 1) {
+              const lowAccuracyOptions = { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 };
+              tryLocation(lowAccuracyOptions, 2);
+            } else {
+              reject(error);
+            }
+          },
+          options
+        );
+      };
+      const highAccuracyOptions = { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000, forceRequestLocation: true };
+      tryLocation(highAccuracyOptions, 1);
+    });
+  };
   const handleSearch = async () => {
     const locationQuery = search.trim();
     if (!locationQuery || locationQuery === '') {
@@ -374,55 +375,67 @@ const getCurrentLocation = () => {
     }
   };
   const getDirections = async (endLoc) => {
-    
-    // vvvv THIS IS THE IMPORTANT NEW CHECK vvvv
-    // 1. Check if we have the user's location first.
     if (!userLocation) {
-      Alert.alert(
-        "Location Needed", 
-        "Your current location is not available yet. Please wait a moment and try again.",
-        [{ text: "OK" }]
-      );
-      console.log("Cannot get directions because userLocation is null.");
-      return; // Stop the function here.
+      Alert.alert("Location Needed", "Your current location is not available yet.");
+      return;
     }
-    // ^^^^ END OF THE NEW CHECK ^^^^
+    const url = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+    const data = {
+      origin: { location: { latLng: { latitude: userLocation.latitude, longitude: userLocation.longitude } } },
+      destination: { location: { latLng: { latitude: endLoc.latitude, longitude: endLoc.longitude } } },
+      travelMode: 'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE',
+      polylineEncoding: 'ENCODED_POLYLINE',
+    };
 
+    console.log("SENDING TO NEW ROUTES API...");
 
-    // If the check passes, the rest of the function runs as before.
     try {
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${userLocation.latitude},${userLocation.longitude}&destination=${endLoc.latitude},${endLoc.longitude}&key=${GOOGLE_API_KEY}`;
-      
-      const response = await axios.get(url);
-      
-      if (response.data.routes.length > 0) {
-        // ... all the polyline decoding logic (no change here) ...
-        const points = response.data.routes[0].overview_polyline.points;
-        const decodedPoints = polyline.decode(points);
-        const coords = decodedPoints.map(point => ({
-          latitude: point[0],
-          longitude: point[1],
-        }));
-        
-        setRouteCoordinates(coords);
-        
-        if (mapRef.current) {
-          mapRef.current.fitToCoordinates(coords, {
-            edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
-            animated: true,
+      const response = await axios.post(url, data, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_API_KEY,
+          'X-Goog-FieldMask': 'routes.polyline.encodedPolyline,routes.distanceMeters,routes.duration'
+        }
+      });
+
+      if (response.data.routes && response.data.routes.length > 0) {
+        const route = response.data.routes[0];
+        const points = route.polyline.encodedPolyline;
+
+        if (points) {
+          const decodedPoints = polyline.decode(points);
+          const distanceInKm = (route.distanceMeters / 1000).toFixed(1);
+          const durationInMinutes = Math.round(parseInt(route.duration.slice(0, -1)) / 60);
+          const coords = decodedPoints.map(point => ({
+            latitude: point[0],
+            longitude: point[1],
+          }));
+          setRouteInfo({
+            distance: `${distanceInKm} km`,
+            duration: `${durationInMinutes} min`
           });
+
+          setRouteCoordinates(coords);
+
+          if (mapRef.current) {
+            mapRef.current.fitToCoordinates(coords, {
+              edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
+              animated: true,
+            });
+          }
+        } else {
+          Alert.alert("No Route Found", "Could not find a polyline for this route.");
         }
       } else {
-        // This handles cases where Google can't find a route
         Alert.alert("No Route Found", "Could not find a route to this destination.");
       }
     } catch (error) {
-      // ... our improved error logging (no change here) ...
       if (error.response) {
-        console.error("Directions API Response Error:", error.response.data);
-        Alert.alert("Directions Error", error.response.data.error_message || "Could not get directions.");
+        console.error("Routes API Response Error:", error.response.data);
+        Alert.alert("Directions Error", error.response.data.error?.message || "Could not get directions.");
       } else {
-        console.error("Directions API Setup Error:", error.message);
+        console.error("Routes API Setup Error:", error.message);
         Alert.alert("Error", "An unexpected error occurred.");
       }
     }
@@ -514,14 +527,20 @@ const getCurrentLocation = () => {
           )}
 
           <Text style={styles.cardDescription} numberOfLines={1}>{item.description}</Text>
-          
+
           <View style={styles.cardFooter}>
             {item.openNow !== undefined && (
               <Text style={[styles.statusText, item.openNow ? styles.openText : styles.closedText]}>
                 {item.openNow ? 'Open Now' : 'Closed'}
               </Text>
             )}
-            <TouchableOpacity onPress={() => openDirections(item.coordinate.latitude, item.coordinate.longitude)}>
+            <TouchableOpacity onPress={() => {
+              const destination = {
+                latitude: item.coordinate.latitude,
+                longitude: item.coordinate.longitude
+              };
+              openDirections(destination.latitude, destination.longitude);
+            }}>
               <View style={styles.directionsButton}>
                 <Icon name="directions" color="white" size={14} />
               </View>
@@ -567,8 +586,11 @@ const getCurrentLocation = () => {
             </Text>
           )}
           <TouchableOpacity onPress={() => {
-            console.log("Directions Button on Map Card PRESSED!");
-            getDirections(item.coordinate);
+            const destination = {
+              latitude: item.coordinate.latitude,
+              longitude: item.coordinate.longitude
+            };
+            getDirections(userLocation, destination);
           }}>
             <View style={styles.mapCardDirectionsButton}>
               <Icon name="directions" color="white" size={14} style={{ marginRight: 5 }} />
@@ -716,6 +738,7 @@ const getCurrentLocation = () => {
               showsHorizontalScrollIndicator={false}
               style={styles.carousel}
               contentContainerStyle={styles.carouselContent}
+              keyboardShouldPersistTaps="handled"
             />
           </View>
         )}
@@ -757,7 +780,7 @@ const getCurrentLocation = () => {
         )}
       </MapView>
 
-      <TouchableOpacity style={styles.backButton} onPress={() => { setMapVisible(false); setPlaces([]); setSearch(""); setRouteCoordinates([]); }}>
+      <TouchableOpacity style={styles.backButton} onPress={() => { setMapVisible(false); setPlaces([]); setSearch(""); setRouteCoordinates([]); setRouteInfo(null); }}>
         <Icon name="arrow-back" size={24} color="#333" />
       </TouchableOpacity>
 
@@ -779,17 +802,23 @@ const getCurrentLocation = () => {
           <Text style={styles.mapLoadingText}>Loading...</Text>
         </View>
       )}
+      {routeInfo && (
+        <View style={styles.routeInfoContainer}>
+          <Text style={styles.routeInfoText}>Distance: {routeInfo.distance}</Text>
+          <Text style={styles.routeInfoText}>Duration: ~{routeInfo.duration}</Text>
+        </View>
+      )}
 
       {places.length > 0 && !isLoading && (
         <FlatList
-        ref={flatListRef}
-        data={places}
-        renderItem={renderMapCard}
-        keyExtractor={item => item.id.toString()}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.mapCarousel}
-        contentContainerStyle={styles.mapCarouselContent}
+          ref={flatListRef}
+          data={places}
+          renderItem={renderMapCard}
+          keyExtractor={item => item.id.toString()}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.mapCarousel}
+          contentContainerStyle={styles.mapCarouselContent}
           keyboardShouldPersistTaps="handled"
         />
       )}
@@ -991,79 +1020,79 @@ const styles = StyleSheet.create({
   filterBtnTextActive: {
     color: 'white',
   },
- card: {
-  backgroundColor: 'white',
-  borderRadius: 15,
-  width: screenWidth * 0.9,
-  marginRight: 15,
-  elevation: 3,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-},
-cardInnerContainer: {
-  flexDirection: 'row',
-},
-cardImage: {
-  width: 100,
-  height: '100%',
-  borderTopLeftRadius: 15,
-  borderBottomLeftRadius: 15,
-},
-cardContent: {
-  flex: 1,
-  padding: 12,
-  justifyContent: 'space-between',
-},
-selectedCard: {
-  borderColor: '#6A0DAD',
-  borderWidth: 2,
-},
-cardTitleContainer: {
-},
-cardTitle: {
-  fontSize: 15,
-  fontWeight: 'bold',
-  color: '#333',
-},
-ratingContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginTop: 4,
-},
-ratingText: {
-  fontSize: 12,
-  fontWeight: '600',
-  marginLeft: 4,
-  color: '#666',
-},
-cardDescription: {
-  fontSize: 13,
-  color: '#888',
-  marginTop: 4,
-},
-cardFooter: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginTop: 8,
-},
-statusText: {
-  fontSize: 13,
-  fontWeight: 'bold',
-},
-openText: {
-  color: '#28a745',
-},
-closedText: {
-  color: '#dc3545',
-},
-directionsButton: {
-  backgroundColor: '#6A0DAD',
-  borderRadius: 18,
-  padding: 8,
-},
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    width: screenWidth * 0.9,
+    marginRight: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  cardInnerContainer: {
+    flexDirection: 'row',
+  },
+  cardImage: {
+    width: 100,
+    height: '100%',
+    borderTopLeftRadius: 15,
+    borderBottomLeftRadius: 15,
+  },
+  cardContent: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  selectedCard: {
+    borderColor: '#6A0DAD',
+    borderWidth: 2,
+  },
+  cardTitleContainer: {
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+    color: '#666',
+  },
+  cardDescription: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 4,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  openText: {
+    color: '#28a745',
+  },
+  closedText: {
+    color: '#dc3545',
+  },
+  directionsButton: {
+    backgroundColor: '#6A0DAD',
+    borderRadius: 18,
+    padding: 8,
+  },
   mapCarousel: {
     position: 'absolute',
     bottom: 20,
@@ -1204,6 +1233,23 @@ directionsButton: {
     marginTop: 10,
     color: '#6A0DAD',
     fontWeight: '600',
+  },
+  routeInfoContainer: {
+    position: 'absolute',
+    top: 110, // Search bar එකට යටින්
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(106, 13, 218, 0.9)', // දම් පාට background එකක්
+    padding: 15,
+    borderRadius: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    elevation: 10,
+  },
+  routeInfoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
