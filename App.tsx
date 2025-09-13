@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { View, ActivityIndicator } from 'react-native';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+
 
 import AuthNavigator from './src/navigation/AuthNavigator';
 import MainAppNavigator from './src/navigation/MainAppNavigator';
 
 import { LocationProvider } from './src/contexts/LocationContext';
+import { configureGoggleSignIn } from './src/config/googleSignInConfig';
 
 const AppContent = () => {
   const [initializing, setInitializing] = useState(true);
@@ -17,11 +18,11 @@ const AppContent = () => {
     setUser(userResult);
     if (initializing) setInitializing(false);
   }
-  useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: '266909651460-2i8ukrs6kgo8d3qmd482fbbjoee7a9ae.apps.googleusercontent.com',
-    });
-  }, []);
+  // useEffect(() => {
+  //   GoogleSignin.configure({
+  //     webClientId: '233655277425-9fkkq7o117r52pbs3sie5s3podovvroe.apps.googleusercontent.com',
+  //   });
+  // }, []);
 
   useEffect(() => {
     const subscriber = auth().onAuthStateChanged(onAuthStateChanged);
@@ -40,6 +41,11 @@ const AppContent = () => {
 };
 
 const App = () => {
+  useEffect(() => {
+    console.log("Configuring Google Sign-In...");
+    configureGoggleSignIn(); 
+  }, []);
+
   return (
     <LocationProvider>
       <AppContent />

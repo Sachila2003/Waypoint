@@ -3,6 +3,7 @@ import { View, SafeAreaView, Text, TextInput, TouchableOpacity, StyleSheet, Keyb
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 
 const RegisterScreen = ({ onRegisterSuccess = () => {}, onNavigateToLogin = () => {} }) => {
     const [fullName, setFullName] = useState('');
@@ -35,10 +36,21 @@ const RegisterScreen = ({ onRegisterSuccess = () => {}, onNavigateToLogin = () =
 
         try {
             const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+            
             await userCredential.user.updateProfile({
                 displayName: fullName
             });
-            console.log('User account created & signed in!', userCredential.user);
+
+            await firestore().collection('users').doc(userCredential.user.uid).set({
+                uid: userCredential.user.uid,
+                fullName: fullName,
+                username: username,
+                email: email,
+                phoneNumber: mobileNumber,
+                createdAt: firestore.FieldValue.serverTimestamp(),
+            });
+
+            console.log('User account created & data saved to Firestore!');
             Alert.alert(
                 'Success!',
                 'Your account has been created successfully. Please login to continue.',
@@ -63,9 +75,7 @@ const RegisterScreen = ({ onRegisterSuccess = () => {}, onNavigateToLogin = () =
     const onGoogleButtonPress = async () => {
         setIsGoogleLoading(true);
         try {
-          //check if play services is available
             await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true});
-            //get the users id token
             const {idToken} = await GoogleSignin.signIn();
     
             const googleCredential = auth.GoogleAuthProvider.credential(idToken);
@@ -231,14 +241,12 @@ const RegisterScreen = ({ onRegisterSuccess = () => {}, onNavigateToLogin = () =
                         </TouchableOpacity>
                     </View>
 
-                    {/* Divider */}
                     <View style={styles.dividerContainer}>
                         <View style={styles.dividerLine} />
                         <Text style={styles.dividerText}>or continue with</Text>
                         <View style={styles.dividerLine} />
                     </View>
 
-                    {/* Social Login Section */}
                     <View style={styles.socialContainer}>
                         <TouchableOpacity 
                             style={[styles.socialButton, styles.googleButton, isGoogleLoading && styles.buttonDisabled]} 
@@ -269,7 +277,6 @@ const RegisterScreen = ({ onRegisterSuccess = () => {}, onNavigateToLogin = () =
                         )}
                     </View>
 
-                    {/* Login Link */}
                     <View style={styles.loginLinkContainer}>
                         <Text style={styles.loginLinkText}>Already have an account? </Text>
                         <TouchableOpacity onPress={onNavigateToLogin}>
