@@ -5,6 +5,7 @@ import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import { useLocation } from '../contexts/LocationContext';
+import DirectionsScreen from '../screens/DirectionsScreen';
 import { TouchableOpacity, View, Text, StyleSheet, Modal, SafeAreaView } from 'react-native';
 import { Icon } from '@rneui/themed';
 
@@ -35,14 +36,14 @@ const BurgerMenu = ({ navigation, isVisible, onClose }) => {
             visible={isVisible}
             onRequestClose={onClose}
         >
-            <TouchableOpacity 
+            <TouchableOpacity
                 style={styles.menuOverlay}
                 activeOpacity={1}
                 onPress={onClose}
             >
                 <SafeAreaView style={styles.menuContainer}>
                     <View style={styles.menuContent}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.menuItem}
                             onPress={() => {
                                 onClose();
@@ -52,7 +53,7 @@ const BurgerMenu = ({ navigation, isVisible, onClose }) => {
                             <Icon name="home" type="material" size={24} color="#333" />
                             <Text style={styles.menuText}>Home</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.menuItem}
                             onPress={() => {
                                 onClose();
@@ -62,7 +63,7 @@ const BurgerMenu = ({ navigation, isVisible, onClose }) => {
                             <Icon name="person" type="material" size={24} color="#333" />
                             <Text style={styles.menuText}>Profile</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.menuItem}
                             onPress={() => {
                                 onClose();
@@ -95,13 +96,13 @@ const MainAppNavigator = () => {
                     headerTintColor: '#333',
                 }}
             >
-                <Stack.Screen 
-                    name="Home" 
-                    component={HomeScreen} 
+                <Stack.Screen
+                    name="Home"
+                    component={HomeScreen}
                     options={{
                         headerTitle: () => <CustomHeaderTitle />,
                         headerLeft: () => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={() => setMenuVisible(true)}
                                 style={{ marginLeft: 15 }}
                             >
@@ -109,22 +110,22 @@ const MainAppNavigator = () => {
                             </TouchableOpacity>
                         ),
                         headerRight: () => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={() => navigation.navigate('Profile')}
                                 style={{ marginRight: 15 }}
                             >
                                 <Icon name="person-circle-outline" type="ionicon" size={28} color="#6A0DAD" />
                             </TouchableOpacity>
                         ),
-                    }} 
+                    }}
                 />
-                <Stack.Screen 
-                    name="Profile" 
-                    component={ProfileScreen} 
+                <Stack.Screen
+                    name="Profile"
+                    component={ProfileScreen}
                     options={{
                         title: 'My Profile',
                         headerLeft: () => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={() => setMenuVisible(true)}
                                 style={{ marginLeft: 15 }}
                             >
@@ -133,13 +134,13 @@ const MainAppNavigator = () => {
                         ),
                     }}
                 />
-                <Stack.Screen 
-                    name="History" 
-                    component={HistoryScreen} 
+                <Stack.Screen
+                    name="History"
+                    component={HistoryScreen}
                     options={{
                         title: 'History',
                         headerLeft: () => (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 onPress={() => setMenuVisible(true)}
                                 style={{ marginLeft: 15 }}
                             >
@@ -148,11 +149,18 @@ const MainAppNavigator = () => {
                         ),
                     }}
                 />
+                <Stack.Screen
+                    name="Directions"
+                    component={DirectionsScreen}
+                    options={{
+                        headerShown: false
+                    }}
+                />
             </Stack.Navigator>
-            <BurgerMenu 
+            <BurgerMenu
                 navigation={navigation}
-                isVisible={menuVisible} 
-                onClose={() => setMenuVisible(false)} 
+                isVisible={menuVisible}
+                onClose={() => setMenuVisible(false)}
             />
         </>
     );

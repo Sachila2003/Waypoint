@@ -586,11 +586,15 @@ const HomeScreen = ({ navigation }) => {
             </Text>
           )}
           <TouchableOpacity onPress={() => {
-            const destination = {
-              latitude: item.coordinate.latitude,
-              longitude: item.coordinate.longitude
-            };
-            getDirections(userLocation, destination);
+            if (userLocation) {
+              navigation.navigate('Directions', {
+                startLocation: userLocation,
+                endLocation: item.coordinate,
+                placeDetails: item
+              });
+            } else {
+              Alert.alert("Location Needed", "Your current location is not available yet.");
+            }
           }}>
             <View style={styles.mapCardDirectionsButton}>
               <Icon name="directions" color="white" size={14} style={{ marginRight: 5 }} />
