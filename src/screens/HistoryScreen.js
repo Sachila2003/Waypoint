@@ -15,8 +15,8 @@ const HistoryScreen = ({ navigation }) => {
         .collection('userHistory')
         .doc(user.uid)
         .collection('searches')
-        .orderBy('timestamp', 'desc') // Get the latest searches first
-        .limit(20) // Get last 20 searches
+        .orderBy('timestamp', 'desc')
+        .limit(20)
         .onSnapshot(querySnapshot => {
           const searches = [];
           querySnapshot.forEach(documentSnapshot => {
@@ -29,7 +29,6 @@ const HistoryScreen = ({ navigation }) => {
           setLoading(false);
         });
 
-      // Unsubscribe from events when no longer in use
       return () => subscriber();
     }
   }, [user]);
