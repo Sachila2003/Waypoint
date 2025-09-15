@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,24 +11,50 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { launchImageLibrary } from 'react-native-image-picker';
 import storage from '@react-native-firebase/storage';
-
+import { useFocusEffect } from '@react-navigation/native';
 
 const ProfileScreen = ({ navigation }) => {
   const user = auth().currentUser;
-  const [displayName, setDisplayName] = useState(user?.displayName || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phoneNumber || '');
-  const [isEditing, setIsEditing] = useState(false);
-  const [profilePic, setProfilePic] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (user?.photoURL) {
-      setProfilePic({ uri: user.photoURL });
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
+
+  const [displayName, setDisplayName] = useState('');
+  const [phone, setPhone] = useState('');
+
+  const fetchUserData = async () => {
+    if (user) {
+      if (user.photoURL) {
+        setProfilePic({ uri: user.photoURL });
+      }
+
+      try {
+        const userDocument = await firestore().collection('users').doc(user.uid).get();
+
+        if (userDocument.exists) {
+          const userData = userDocument.data();
+          console.log("Firestore data loaded:", userData);
+          setDisplayName(userData.fullName || user.displayName || '');
+          setPhone(userData.phoneNumber || '');
+        } else {
+          setDisplayName(user.displayName || '');
+          setPhone(user.phoneNumber || '');
+        }
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
+      }
     }
-  }, [user]);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserData();
+    }, [user])
+  );
 
   const handleUpdateProfilePic = async () => {
     const options = {
@@ -37,55 +63,55 @@ const ProfileScreen = ({ navigation }) => {
     };
 
     launchImageLibrary(options, async (response) => {
-      if (response.didCancel) {
-        console.log('User cancelled image picker');
-      } else if (response.errorCode) {
-        console.log('ImagePicker Error: ', response.errorMessage);
-      } else {
-        const imageUri = response.assets[0].uri;
-        if (!imageUri) {
-          Alert.alert('Error', 'Could not get the image path.');
-          return;
-        }
+      if (response.didCancel) { return; }
+      if (response.errorCode) { console.log('ImagePicker Error: ', response.errorMessage); return; }
+      
+      const imageUri = response.assets[0].uri;
+      if (!imageUri) { Alert.alert('Error', 'Could not get image path.'); return; }
 
-        setLoading(true);
+      setLoading(true);
+      const filename = imageUri.substring(imageUri.lastIndexOf('/') + 1);
+      const storageRef = storage().ref(`profile_pictures/${user.uid}/${filename}`);
 
-        const filename = imageUri.substring(imageUri.lastIndexOf('/') + 1);
-        const storageRef = storage().ref(`profile_pictures/${user.uid}/${filename}`);
-
-        try {
-          // Firebase Storage ekt image ek upload krnw
-          await storageRef.putFile(imageUri);
-
-          // Upload krt psse  download URL ek gnnw
-          const url = await storageRef.getDownloadURL();
-
-          // User ge profile ek update krnw aluth  URL eken
-          await user.updateProfile({ photoURL: url });
-
-          // State ek update krl UI eke pennw
-          setProfilePic({ uri: url });
-
-          Alert.alert('Success', 'Profile picture updated successfully!');
-        } catch (error) {
-          console.error(error);
-          Alert.alert('Error', 'Failed to upload profile picture.');
-        } finally {
-          setLoading(false);
-        }
+      try {
+        await storageRef.putFile(imageUri);
+        const url = await storageRef.getDownloadURL();
+        await user.updateProfile({ photoURL: url });
+        setProfilePic({ uri: url });
+        Alert.alert('Success', 'Profile picture updated successfully!');
+      } catch (error) {
+        console.error(error);
+        Alert.alert('Error', 'Failed to upload profile picture.');
+      } finally {
+        setLoading(false);
       }
     });
   };
+
   const handleUpdateProfile = async () => {
+    if (!displayName.trim()) {
+      Alert.alert('Error', 'Display name cannot be empty.');
+      return;
+    }
+
     setLoading(true);
+
     try {
       await user.updateProfile({ displayName });
+      await firestore().collection('users').doc(user.uid).update({
+        fullName: displayName,
+        phoneNumber: phone,
+      });
+      
       Alert.alert('Success', 'Profile updated successfully!');
-      setIsEditing(false);
+      setIsEditing(false); 
+
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error("Profile Update Error:", error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSignOut = () => {
@@ -101,10 +127,6 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <ScrollView style={styles.container}>
-      {/* <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Profile</Text>
-      </View> */}
-
       <View style={styles.profileSection}>
         <TouchableOpacity onPress={handleUpdateProfilePic} disabled={loading}>
           <View style={styles.avatarWrapper}>
@@ -112,9 +134,7 @@ const ProfileScreen = ({ navigation }) => {
               <Image source={profilePic} style={styles.avatar} />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>
-                  {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
-                </Text>
+                <Text style={styles.avatarText}>{displayName ? displayName.charAt(0).toUpperCase() : 'U'}</Text>
               </View>
             )}
             <View style={styles.cameraIcon}>
@@ -122,17 +142,11 @@ const ProfileScreen = ({ navigation }) => {
             </View>
           </View>
         </TouchableOpacity>
-
-        <Text style={styles.userName}>{user?.displayName || 'User Name'}</Text>
+        <Text style={styles.userName}>{displayName || 'User Name'}</Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
 
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => setIsEditing(!isEditing)}
-        >
-          <Text style={styles.editButtonText}>
-            {isEditing ? 'Cancel' : 'Edit Profile'}
-          </Text>
+        <TouchableOpacity style={styles.editButton} onPress={() => setIsEditing(!isEditing)}>
+          <Text style={styles.editButtonText}>{isEditing ? 'Cancel' : 'Edit Profile'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -142,14 +156,9 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Display Name</Text>
           {isEditing ? (
-            <TextInput
-              style={styles.input}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Enter your name"
-            />
+            <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} />
           ) : (
-            <Text style={styles.infoText}>{user?.displayName || 'Not set'}</Text>
+            <Text style={styles.infoText}>{displayName || 'Not set'}</Text>
           )}
         </View>
 
@@ -161,15 +170,9 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Phone Number</Text>
           {isEditing ? (
-            <TextInput
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter your phone number"
-              keyboardType="phone-pad"
-            />
+            <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
           ) : (
-            <Text style={styles.infoText}>{user?.phoneNumber || 'Not provided'}</Text>
+            <Text style={styles.infoText}>{phone || 'Not provided'}</Text>
           )}
         </View>
 
@@ -179,11 +182,7 @@ const ProfileScreen = ({ navigation }) => {
             onPress={handleUpdateProfile}
             disabled={loading}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Save Changes</Text>
-            )}
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save Changes</Text>}
           </TouchableOpacity>
         )}
       </View>

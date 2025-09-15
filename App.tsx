@@ -8,7 +8,7 @@ import AuthNavigator from './src/navigation/AuthNavigator';
 import MainAppNavigator from './src/navigation/MainAppNavigator';
 
 import { LocationProvider } from './src/contexts/LocationContext';
-import { configureGoggleSignIn } from './src/config/googleSignInConfig';
+import { configureGoogleSignIn } from './src/config/googleSignInConfig';
 
 const AppContent = () => {
   const [initializing, setInitializing] = useState(true);
@@ -43,7 +43,7 @@ const AppContent = () => {
 const App = () => {
   useEffect(() => {
     console.log("Configuring Google Sign-In...");
-    configureGoggleSignIn(); 
+    configureGoogleSignIn(); 
   }, []);
 
   return (
